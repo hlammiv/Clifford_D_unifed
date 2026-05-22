@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+eps="1e-5"
+
+f="4"
+n="1"
+u="0"
+
+out="D/Y${n}_f=${f}_u=${u}_eps=${eps}"
+python -m zeta9_vector.collect_targets \
+    --f "${f}" \
+    --norm "${n}" \
+    --u "${u}" \
+    --eps "${eps}" \
+    --eps_bin_width 0 \
+    --output "${out}" \
+    #--resume

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+eps="3e-6"
+
+f="5"
+n="2"
+
+
+sage -python -m zeta9.build_triple_chunk_metadata \
+  --triples_file "D/T${n}_f=${f}_eps=${eps}" \
+  --triples_json "D/T${n}_f=${f}_eps=${eps}.manifest.json" \
+  --rootdb_prefix "D/R${n}_f=${f}_eps=${eps}_local" \
+  --output_prefix "D/R${n}_f=${f}_eps=${eps}_triples_chunk_meta" \
+  --triples_chunk_rows 200000

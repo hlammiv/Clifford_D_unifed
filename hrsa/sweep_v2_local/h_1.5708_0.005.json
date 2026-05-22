@@ -1,0 +1,56 @@
+{
+  "identification": {
+    "backend": "hrsa",
+    "version": "hrsa-2026-05",
+    "command_line": ["./HRSA_tester", "1.5708", "0.005", "6", "--max-direct", "3", "--use-bidir", "5", "--max-solns", "10", "--json", "sweep_v2_local/h_1.5708_0.005.json"],
+    "host": "lucia",
+    "timestamp": "2026-05-09T22:07:17Z",
+    "schema_version": "1.0"
+  },
+  "inputs": {
+    "theta": 1.5708,
+    "epsilon": 0.005,
+    "max_f": 6,
+    "c": 1,
+    "max_solns": 10,
+    "max_direct": 3
+  },
+  "achieved": {
+    "success": true,
+    "achieved_frob": 0.00334939,
+    "epsilon_passed": true,
+    "f_level": 6,
+    "method": "HRSA(f=3)"
+  },
+  "unitary": {
+    "ring": "Z[zeta_9, 1/3]",
+    "basis": "1, zeta9, zeta9^2, zeta9^3, zeta9^4, zeta9^5",
+    "f": 6,
+    "V": [
+      [[-133, 190, -154, -450, -303, -21], [238, -165, 165, 0, -7, 158], [163, -112, 104, 79, -115, 174]],
+      [[61, -170, 170, 0, -107, 63], [317, 154, -190, 450, 133, -493], [182, -170, 148, 146, -236, 241]],
+      [[36, -148, 170, -146, 93, -66], [84, -104, 112, -79, 70, -3], [430, 335, -335, 0, 114, -221]]
+    ]
+  },
+  "decomposition": {
+    "N_D": 43,
+    "N_C": null,
+    "N_total": null,
+    "sde_chi_initial": 36,
+    "sde_chi_final": 0,
+    "syllables": [{"a0": 2, "a1": 0, "a2": 0, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 2, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 2, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 1, "delta": 1, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 2, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 8, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 7, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 8, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 2, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 8, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 2, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 2, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 6, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 8, "a2": 4, "eps": 1, "delta": 1, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 6, "a1": 0, "a2": 7, "eps": 0, "delta": 2, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}]
+  },
+  "sanity_checks": {
+    "unitarity_residual": 0,
+    "frobenius_check_passed": true,
+    "decompose_roundtrip_passed": null
+  },
+  "performance": {
+    "wall_seconds": 24.9659,
+    "cpu_seconds": 24.9659,
+    "max_rss_kb": 0,
+    "threads": 16,
+    "mpi_ranks": null
+  },
+  "errors": []
+}

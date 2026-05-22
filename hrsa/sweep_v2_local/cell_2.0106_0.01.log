@@ -1,0 +1,47 @@
+
+=== Phase 1: Direct search SKIPPED (eps=0.01 < cum_3(theta)~0.407709, non-Clifford angle) ===
+
+=== Phase 2: bidir SKIPPED (eps too tight for K<=5) ===
+
+=== Phase 3: HRSA search ===
+HRSA_bestD: max_solns=10, OMP threads=16
+Enumerating entry candidates for f = 0.
+Finished enumerating entry possibilities for f = 0.
+Enumerating entry candidates for f = 1.
+Finished enumerating entry possibilities for f = 1.
+Enumerating entry candidates for f = 2.
+Finished enumerating entry possibilities for f = 2.
+Enumerating entry candidates for f = 3.
+Finished enumerating entry possibilities for f = 3.
+Found 10 candidate(s) at f=3. Decomposing each to find minimum D-count...
+[canonical_lookup] built 953532 entries in 18.17 s (depth=2, alphabet=8748)
+  Candidate 1/10: D_gates=53
+  Candidate 2/10: D_gates=39
+  Candidate 3/10: D_gates=39
+  Candidate 4/10: D_gates=53
+  Candidate 5/10: D_gates=53
+  Candidate 6/10: D_gates=39
+  Candidate 7/10: D_gates=53
+  Candidate 8/10: D_gates=39
+  Candidate 9/10: D_gates=53
+  Candidate 10/10: D_gates=39
+Epsilon Diff. Val.: 1.24786e-05 Eps. Cond.: 1.25e-05
+Selected candidate 2 with 39 D-gate(s).
+Success!
+x_1: (1/3^3)(28z^0 + -2z^1 + 7z^2 + 19z^3 + 3z^4 + 1z^5) 0.997582
+x_2: (1/3^3)(-2z^0 + -9z^1 + 9z^2 + 6z^4 + 15z^5) 1.00241
+x_3: (1/3^3)(7z^0 + 8z^1 + 1z^2 + -11z^3 + 15z^4 + 5z^5) 0.000835373
+Target x_1 = e^(i theta/2) : 0.535835 + i0.844323
+Found x_1 (should be close to Target x_1): 0.534247 + i0.842467
+Found x_2 (should be close to -1): -1.00241 + i6.5791e-17
+Found x_3 (should be close to 0): 0.0003019 + i0.000778912
+Squared Frobenius norm of vector (should be exactly 2): 2
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.00704806   (target epsilon = 0.01, passes: YES)
+
+=== Summary ===
+Epsilon Diff. Val.: 0.00704806 Eps. Cond.: 1.25e-05
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.00704806   (target epsilon = 0.01, passes: YES)
+Total D gates:    39
+Method: HRSA(f=3)
+Success!
+JSON output written to sweep_v2_local/h_2.0106_0.01.json

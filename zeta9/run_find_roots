@@ -1,0 +1,17 @@
+#!/bin/bash
+
+eps="1e-3"
+
+f="3"
+n="2"
+u="1"
+
+
+sage -python -m zeta9.find_roots_exact_memtrim_v1 \
+  --triples_file "D/T${n}_f=${f}_eps=${eps}" \
+  --triples_json "D/T${n}_f=${f}_eps=${eps}.manifest.json" \
+  --no_legacy_fallback \
+  --rootdb_prefix "D/R${n}_f=${f}_alt_eps=${eps}_local" \
+  --global_rootdb_prefix "D/R${n}_f=${f}_alt_global" \
+  #--resume
+

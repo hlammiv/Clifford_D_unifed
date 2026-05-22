@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+eps="5e-6"
+
+f="5"
+n="2"
+u="0"
+
+out="D/Y${n}_f=${f}_u=${u}_eps=${eps}"
+python -m zeta9_householder.collect_targets \
+    --f "${f}" \
+    --norm "${n}" \
+    --u "${u}" \
+    --eps "${eps}" \
+    --output "${out}" \
+    --eps_bin_width "5e-6" \
+    #--resume

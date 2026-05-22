@@ -1,0 +1,661 @@
+\documentclass[12pt]{amsart}
+\usepackage{latexsym,enumerate}
+\usepackage{amssymb, xcolor,mathrsfs}
+\usepackage{amsmath,amsthm,amsfonts,amssymb,latexsym, mathabx}
+%\usepackage{amsfonts}
+\usepackage[pagebackref]{hyperref}
+\usepackage{comment}
+\usepackage{algorithm} 
+\usepackage{algpseudocode} 
+
+\headheight=7pt
+\textheight=574pt
+\textwidth=432pt
+\topmargin=14pt
+\oddsidemargin=18pt
+\evensidemargin=18pt
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{observation}[theorem]{Observation}
+\newtheorem{consequence}[theorem]{Consequence}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{question}[theorem]{Question}
+
+
+\newtheorem{MainTheorem}{Theorem}
+\renewcommand{\theMainTheorem}{\Alph{MainTheorem}}
+
+\newtheorem{theorema}{Theorem}
+\renewcommand{\thetheorema}{\Alph{theorema}}
+\newtheorem{conj}[theorema]{Conjecture}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem*{notation}{Notation}
+\newtheorem*{acknowledgement}{Acknowledgement}
+
+% Clifford and Related
+\newcommand{\bC}{\mathbf{C}}
+\newcommand{\bD}{\mathbf{D}}
+\newcommand{\bR}{\mathbf{R}}
+
+% WHITESPACE
+\newcommand{\vs}{\vspace{0.2in}}
+\newcommand{\vvs}{\vspace{0.1in}}
+
+% BLACKBOARD BOLDFACE
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\F}{\mathbb{F}}
+
+% SHORTCUTS
+\newcommand{\la}{\langle}
+\newcommand{\ra}{\rangle}
+\newcommand{\lp}{\left(}
+\newcommand{\rp}{\right)}
+\newcommand{\lb}{\left[}
+\newcommand{\rb}{\right]}
+\newcommand{\ol}{\overline}
+\newcommand{\st}{\; | \;} % such that
+
+% MATRIX GROUPS
+\newcommand{\GL}{{\mathrm {GL}}} % general inear group
+\newcommand{\PGL}{{\mathrm {PGL}}} % projective general linear group
+\newcommand{\SL}{{\mathrm {SL}}} % special linear group
+\newcommand{\PSL}{{\mathrm {PSL}}} % projective special linear group
+\newcommand{\POmega}{{\mathrm {P\Omega}}} % projective orthogonal group
+\newcommand{\GU}{{\mathrm {GU}}} % general unitary group
+\newcommand{\PGU}{{\mathrm {PGU}}} % projective general unitary group
+\newcommand{\SU}{{\mathrm {SU}}} % special unitary group
+\newcommand{\PSU}{{\mathrm {PSU}}} %projective speacial unitary group
+\newcommand{\U}{{\mathrm {U}}} % unitary group
+\newcommand{\GO}{{\mathrm {GO}}} % general orthogonal group
+\newcommand{\Spin}{{\mathrm {Spin}}} % spin group
+\newcommand{\SO}{{\mathrm {SO}}} % special orthogonal group
+\newcommand{\Sp}{{\mathrm {Sp}}} % symplectiv group
+\newcommand{\PSp}{{\mathrm {PSp}}} % projective symplectic group
+\DeclareMathOperator{\AGL}{AGL} % affine general inear group
+
+% ALGEBRA OPERATORS
+\newcommand{\Ker}{\operatorname{Ker}} % kernel
+\newcommand{\Aut}{{\mathrm {Aut}}} % automorphism group
+\newcommand{\Out}{{\mathrm {Out}}} % outer autmorphism group 
+\renewcommand{\Im}{\operatorname{Im}} % function image 
+
+% GRAPHS
+\DeclareMathOperator{\Graph}{Graph} % graph
+\DeclareMathOperator{\diam}{diam} % graph diameter
+
+% FIELDS
+\DeclareMathOperator{\chr}{char} % characteristic 
+\DeclareMathOperator{\Gal}{Gal} % Galois group
+\DeclareMathOperator{\Frac}{Frac} % field of fractions
+\newcommand{\GF}{GF} % Galios field
+
+% NUMBER THEORY
+\DeclareMathOperator{\lcm}{lcm} % least common multiple
+\newcommand{\m}{\;\mbox{mod}\;} % modulo
+
+% GROUPS
+\newcommand{\normeq}{\trianglelefteq} % normal or equal to
+\newcommand{\norm}{\triangleleft} % proper normal
+\DeclareMathOperator{\Dic}{Dic} % dicyclic group
+\DeclareMathOperator{\Syl}{Syl} % Sylow subgroup
+\DeclareMathOperator{\ord}{ord} % order
+\DeclareMathOperator{\Soc}{Soc} % socle
+\DeclareMathOperator{\Cl}{Cl} % conjugacy class
+\DeclareMathOperator{\Irr}{Irr} % irreducible characters
+\newcommand{\IBR}{{\mathrm {IBr}}} % irreducible Brauer characters
+\newcommand{\cd}{{\mathrm {cd}}} % character degree set
+\DeclareMathOperator{\ZJ}{ZJ} % Glauberman ZJ subgroup
+\DeclareMathOperator{\Baum}{Baum} % Baumann subgroup
+\newcommand{\Fit}{\textbf{F}} % Fitting subgroup
+\DeclareMathOperator{\Sym}{Sym} % symmetric group
+\DeclareMathOperator{\Alt}{Alt} % alternating group
+\DeclareMathOperator{\Stab}{Stab} % stabilizer
+\DeclareMathOperator{\Orb}{Orb} % orbits
+\DeclareMathOperator{\supp}{supp} % support set
+\DeclareMathOperator{\Hol}{Hol} % holomorph
+\DeclareMathOperator{\Br}{Br} % Brauer morphism
+
+% MODULES/RINGS
+\DeclareMathOperator{\Ann}{Ann} % annihilator
+\DeclareMathOperator{\ann}{ann} % annihilator
+\DeclareMathOperator{\Fix}{Fix} % fixed point submodule
+\DeclareMathOperator{\J}{J} % Jacobson radical
+\DeclareMathOperator{\nil}{nil} % nilradical
+\DeclareMathOperator{\Tor}{Tor} % torsion subgroup
+\DeclareMathOperator{\M}{M} % ?
+
+% GENERAL ALGEBRA
+\DeclareMathOperator{\Hom}{Hom} % homomorphism set
+\DeclareMathOperator{\op}{op} % opposite operator
+\DeclareMathOperator{\Homeo}{Homeo} % homeomorphism group
+\newcommand{\Mor}{{\mathrm {Mor}}} % morphisms
+
+% SETS
+\newcommand{\Pow}{\mathcal{P}}
+\DeclareMathOperator{\Fun}{Fun} % set of funtions
+
+% ???
+\DeclareMathOperator{\col}{col} 
+\DeclareMathOperator{\sdprod}{\rtimes} % 
+\newcommand{\handwritten}{\large \renewcommand{\baselinestretch}{1.35} 
+	\selectfont}
+\newcommand{\handwrittenn}{\fontsize{19}{43} \selectfont}
+\newcommand{\handwrittennn}{\fontsize{19}{30} \selectfont}
+\renewcommand{\labelenumi}{{\bf (\alph{enumi})}}
+\renewcommand{\labelitemi}{$\diamond$} 
+
+% MISC. FUNCTIONS
+\renewcommand{\exp}{\operatorname{exp}} % exponential function
+\DeclareMathOperator{\id}{id} % identity function 
+\DeclareMathOperator{\sgn}{sgn} % sign function
+
+% Linear Algebra
+\DeclareMathOperator{\adj}{adj} % adjoint
+\renewcommand{\det}{\operatorname{det}} % determinant
+\DeclareMathOperator{\End}{End} % endomorphism ring
+\renewcommand{\span}{\operatorname{span}} % span
+\DeclareMathOperator{\tr}{tr} % trace
+\newcommand{\Tr}{{\mathrm {Tr}}} % trace
+\newcommand{\rk}{{\mathrm {rk}}} % rank
+\newcommand{\Spec}{{\mathrm {Spec}}} % spectrum
+\DeclareMathOperator{\Diag}{Diag}
+
+% TEMP. MACROS
+\newcommand{\CD}{(\mathbf{C} + \mathbf{D})_3}
+\newcommand{\CR}{(\mathbf{C} + \mathbf{R})_3}
+\newcommand{\Zn}{\mathbb{Z}[\zeta_9]}
+\newcommand{\Znc}{\mathbb{Z}[\zeta_9,\chi^{-1}]}	
+\newcommand{\Znt}{\mathbb{Z}[\zeta_9,\frac{1}{3}]}
+\DeclareMathOperator{\sde}{sde}
+
+\usepackage{hyperref}
+
+\begin{document}
+	
+\title{Notes on ESA for $(\bC + \bD)_3$.}
+	
+	
+	
+	\author[Christopher Herbig]{Christopher Herbig}
+	\address{
+		Northern Illinois University\\
+		Department of Mathematical Sciences\\
+		Dekalb, IL 60115\\
+		USA}
+	%\email{cherbig@niu.edu}
+	
+
+	
+	%\subjclass[2020]{Primary 20C15, 20C20}
+	%
+	%\keywords{principal block, block theory, characters, finite groups}
+	
+	
+	%\date{\today}
+	
+	\maketitle
+	
+	\section{Introduction}
+	
+	We are interested in approximating certain matrices in $\U(3,\C)$ by a matrix from the matrix group $(\bC+ \bD)_3$. For instance, we would want to approximate the matrix $R_{(0,1)}^Z(\theta) = \Diag(e^{-i\theta/2}, e^{i\theta/2}, 1)$. We describe an exhaustive search algorithm which does this. The algorithm is a generalization of the Algorithm 1 from \cite{Gust} where an algorithm was given for approximating $R_{(0,1)}^Z(\theta)$ instead by unitary matrices from $\CR$. Namely, for $\epsilon > 0$, we wish to find $V \in \CD$ such that $\| R_{(0,1)}^Z(\theta) - V \| < \epsilon$ where $\| \cdot \|$ is the Frobenius norm. 
+	 
+	
+	It can be shown that $\CD$ is the group of $3 \times 3$ unitary matrices over the ring $\Z[\zeta_9, \frac{1}{3}]$, that is, the group $\U(3,\Z[\zeta_9, \frac{1}{3}])$. Here, we take $\zeta_9$ to denote the primitive ninth root of unity $e^{2\pi i/9}$. This fact was established in \cite[Theorem 2.8]{EvPar}, and moreover, it was shown that an efficient algorithm exists to factorize any such approximation as a product of the standard generators of $\CD$. As in the case of Algorithm 1 from \cite{Gust}, our algorithm presented here is exhaustive in the sense that all possibilities for $V$ are eventually tested should the algorithm run for an arbitrarily long amount of time. Here, the entries of our  matrix are elements of the cyclotomic ring $\Z[\zeta_9]$ along with a factor of $\frac{1}{3^f}$ where $f$ is some nonnegative integer. Our algorithm proceeds by successively examining all possible entries for a given choice of $f$. 
+	
+	\section{The Rings $\mathbb{Z}[\zeta_9]$ and $\mathbb{Z}[\zeta_9, \frac{1}{3}]$}
+	
+	In the case where $\CR$ was considered in \cite{Gust}, constructing an exhaustive search method was somewhat easier owing to the fact that $\CR$ is exactly the group of unitary matrices over $\mathbb{Z}[\zeta_3,\chi^{-1}]$ where $\chi = 1 + 2\zeta_3$. Specifically, we are localizing the so-called Eisenstein integers at a ring element $\chi$. The Eisenstein integers are nice in the sense that any connected, polygonal region of finite area in the complex plane contains only finitely many such integers. (The only other cyclotomic ring that shares this property are the Gaussian integers $\Z[i]$). This is no longer the case for other cyclotomic rings such as $\Z[\zeta_9]$ where it is possible to construct algebraic integers having absolute values less than one. In our case, the element $1 - \zeta_9$ is such an example, thus allowing us to construct elements of the ring of arbitrarily small absolute value. In particular, it follows that the ring $\Z[\zeta_9]$ is dense in the complex plane. This prevents a completely direct generalization of Algorithm 1 from \cite{Gust} as one step in that algorithm involves enumerating all ring elements lying in a region of $\C$ enclosed by a line and a circle. However, this does not preclude the existence of an exhaustive search algorithm as we shall see.
+	
+	We introduce the notion of the smallest denominator exponent (sde) of an element of $\Znt$. Elements $x \in \Znt$ can be written in the form 
+	$$
+	\dfrac{a}{3^f}, \;\;\; \mbox{ for } a \in \Z[\zeta_9], f \in \Z^{\geq 0}.
+	$$
+	We define $\sde_3(f)$ to be the smallest possible $f$ where such a factorization is admitted. Specifically, either $f = 0$ or $a$ is indivisible by 3. Again, the number of elements of $\Znt$ having a fixed sde form a dense subset of $\C$, but it has been shown in \cite{Kal} that only finitely many such elements can be entries of a unitary matrix, and moreover, all such elements can be iterated with relative ease.
+	
+	The results given in \cite{Kal} are for the ring $\Znc$ where $\chi = 1 - \zeta_9$. It turns out that this ring equals $\Znt$.
+	
+	\begin{proposition}\label{P:2:1}
+		$\Znt = \Znc$.
+	\end{proposition}
+
+	\begin{proof}
+		We have by the binomial theorem that
+		$$
+			\chi^6 = (1 - \zeta_9)^6 = 1 - 6\zeta_9 + 15\zeta_9^2 - 20\zeta_9^3 + 15\zeta_9^4 - 6\zeta_9^5 + \zeta_9^6,
+		$$
+		but $1 + \zeta_9^3 + \zeta_9^6 = 0$, so we may rewrite the above as
+		$$
+		- 6\zeta_9 + 15\zeta_9^2 - 21\zeta_9^3 + 15\zeta_9^4 - 6\zeta_9^5.
+		$$
+		Each term is divisible by 3, and so $\chi^6/3 \in \Zn$. Thus,
+		$$
+		\frac{1}{3} = \dfrac{\chi^6/3}{\chi^6} \in \Znc,
+		$$
+		so $\Znt \subseteq \Znc$.
+			
+		Likewise, it can be shown that
+		$$
+		\dfrac{1}{1 - \zeta_9} = -\frac{1}{3^2}\sum_{i=1}^8 i\zeta_9^i \in \Znt.
+		$$
+		This is shown by taking derivatives of both sides of the geometric series formula $\dfrac{1 - x^{n}}{1-x} = \sum_{i=0}^{n-1} x^i$ and replacing $x = \zeta_9$ and $n = 9$, thus showing the reverse containment.
+	\end{proof}
+	
+	For simplicity, we will denote $R := \Znc = \Znt$. The concept of sde is well-defined if $\chi$ is considered in place of $3$, which we denote by $\sde_\chi(x)$, the smallest power $f$ of $\chi$ such that $x$ may be represented as $x = a/\chi^f$ for $f \geq 0$ and $a \in \Zn$. It is not generally true however that $\sde_3(x) = \sde_\chi(x)$. We are able to relate the two notions though.
+	\begin{proposition}\label{P:2:2}
+		For $x \in R$, we have $\sde_3(x) = \lceil \sde_\chi(x)/6 \rceil$.
+	\end{proposition}
+	
+	\begin{proof}
+		Write $x = a/3^f$ where $a \in \Zn$ and $f = \sde_3(x)$. The integer 3 is totally ramified in $\Zn$, and so $\chi^6 = 3u$ where $u$ is a unit in $\Zn$ (cf. \cite[Theorem IV.1.1]{Lang}). Since $\Zn$ is a Euclidean domain (and therefore also a unique factorization domain), we can write $a$ uniquely as a product of prime elements (up to factors of units). Now, $\chi$ is prime in $\Zn$, and appears in the factorization to the uniquely determined power $\ell$, that is, $a = \chi^\ell b$ for $b \in \Zn$ indivisible by $\chi$. If $\ell \geq 6$, then $a$ must be divisible by $3$, but $\sde_3(x) = f$. Thus, $\ell < 6$, and since $\chi^6 = 3u$ for $u \in R^{\times}$, we obtain 
+		$$
+		\dfrac{a}{3^f} = \dfrac{u^f\chi^\ell b }{\chi^{6f}}
+		$$
+		The uniqueness of the factorization above allows us to cancel out exactly $\ell$ factors of $\chi$. So, it follows that $\sde_\chi(x) = 6\sde_3(x) - \ell$, which gives us the desired result.
+	\end{proof}
+
+	Now, the results in \cite{Kal} specifically deal with $R$ formulated as $\Znc$ and as such exclusively regard $\sde_\chi$. We want to translate these results into  However, Proposition \ref{P:2:2} allows us to translate these into results for $\sde_3$ with relative ease. Namely, it was established in \cite[Lemma 5.1]{Kal} that for any unit vector $(v_1, v_2, v_3)^T \in R^3$, the sde in terms of $\chi$ for each entry is the same. Now, \ref{P:2:2} implies the following:
+	
+	\begin{proposition}\label{P:2:3}
+		Let $(v_1, v_2, v_3)^T \in R^3$ be a unit vector. We have $\sde_3(v_1) = \sde_3(v_2) = \sde_3(v_3)$.
+	\end{proposition}
+	
+	This fact shall allow us to simplify certain steps in our algorithm.
+
+	As previously mentioned, the number of elements of $R$ lying in connected region of finite area in $\C$ is infinite, but making the additional requirement that the elements of $R$ should lie in a unit vector restricts to only a finite number of possibilities. To do so, we introduce a lemma and some notation
+	
+	\begin{lemma}\label{L:2:1}
+		An element $a \in \mathbb{Z}[\zeta_9]$ can be written uniquely in the following form:
+		$$
+		a = \sum_{i=0}^5 a_i \zeta_9^i, \;\;\; \mbox{for} \;\;\; a_i \in \Z.
+		$$
+	\end{lemma} 
+	This follows from the fact that $\{\zeta_9^i\}_{i=0}^5$ is a basis for $\Q(\zeta_9)$ when viewed as a $\Q$-vector space. Algorithmically, we can get rid of the terms $a_i\zeta_9^i$ for $i=6,7,8$ by taking advantage of the fact that
+	
+	$$
+	\zeta_9^{6+k} = -\zeta_9^{k} - \zeta_9^{3+k}
+	$$
+	for $k=0,1,2$.
+	
+	We obtain the following result, which is a slight modification of \cite[Theorem 4.3]{Kal}.
+	
+	\begin{proposition}\label{P:2:4}
+		Let $x = \frac{a}{3^f} \in R$ where $a = \sum_{i=0}^5 a_i \zeta_9^i \in \Zn$ and $f = \sde_3(x)$. If $x$ is an entry of a unit vector in $R^3$, then $a$ satisfies $q(a) \leq 3^{2f}$ where $q$ is the positive definite quadratic form given by
+		$$
+			q(a) = \sum_{i=0}^5 a_i^2 - a_0a_3 - a_1a_4 - a_2a_5 = \frac{1}{4}\big[(2a_0 - a_3)^2 + 3a_3^2 + (2a_1 - a_4)^2 + 3a_4^2 + (2a_2 - a_5) + 3a_5^2\big].
+		$$
+		In particular, if $\dfrac{1}{3^f}(a,b,c)^T$ is a unit vector in $R^3$, then $q(a) + q(b) + q(c) = 3^{2f}$.
+	\end{proposition}
+	
+	This is seen by following through \S4 of \cite{Kal} using 3 in place of $\chi$. The fact that $q$ is positive definite and bounded for a given $\sde_3$ is precisely what allows us to circumvent the density of $\Zn$ in $\C$. (As for the second part of the theorem, I am not personally sure whether the converse is true).
+	
+	We state one more result of particular use to us.
+	
+	\begin{proposition}\label{P:2:5}
+		Let $a \in \Zn$, and write $a = \sum_{i=0}^5 a_i \zeta_9^1$ for $a_i \in \Z$. Then $a$ is divisible by a rational integer $m$ in $\Zn$ iff each integer $a_i$ is divisible by $m$.
+	\end{proposition}
+	
+	\begin{proof}
+		The ``if'' direction is clear. For the ``only if'' direction, assume that $a$ is divisible by $m$ so that $a = m \cdot b$ for $b \in \Zn$. If we write $b$ in the standard basis, then $b = \sum_{i=0}^5 b_i \zeta_9^i$. Comparing coefficients gives $a_i = mb_i$ for each $i$, as desired.
+	\end{proof}
+	
+	\section{Galois Automorphisms And The Field Norm}
+	
+	Our algorithm will eventually require us to solve equations of the form $ax = b$ for $x$ where $a,x,b \in \Zn$. Since we cannot divide arbitrarily in rings, the solution $x$ is not guaranteed to lie in $\Zn$ or even in $R$. We want to be able to determine when equations of said form have a solution $x \in \Zn$, and if so, we want to be able to find them. One approach may be to take advantage of the fact that $\Zn$ is a Euclidean domain, that is, there exists a sensible notion of long division for this ring. (Note: $\Zn$ is one of only a finite list of cyclotomic rings having this property!) However, there does not appear to be a Euclidean algorithm for this ring that is amenable to our purposes. The main issue is that it seems there would be little we can say about the remainder for a given choice of a Euclidean algorithm. However, we are able to take advantage of the nice properties of the so-called field norm to solve such equations.
+	
+	To define the field norm, we must first define Galois automorphisms. In the context of math, we define a field as being a set $F$ endowed with a notion of addition, subtraction, multiplication, and division satisfying the following properties.
+	\begin{definition}\label{D:3:1}
+		A field is a triple consisting of a set and two binary operations, $(F,+,\cdot)$, satisfying the following axioms:
+	
+	\begin{itemize}
+		\item[1.] (Closure) If $x, y \in F$, then $x + y \in F$ and $x \cdot y \in F$.
+		\item[2.] (Additive identity) There exists an element $0 \in F$ such that $x + 0 = x$ for all $x \in F$.
+		\item[3.] (Additive Inverses) For any $x \in F$, there exists $-x \in F$ such that $x + (-x) = 0$.
+		\item[4.] (Multiplicative Identity) There exists $1 \in F$ such that $1 \cdot x = x$ for all $x \in F$.
+		\item[5.] (Multiplicate Inverses) For any $x \in F - \{0\}$, there exists $x^{-1} \in F$ such that $x\cdot x^{-1} = 1$.
+		\item[6.] (Commutativity) For any $x,y \in F$, we have $x + y = y + x$ and $x\cdot y = y \cdot x$.
+		\item[7.] (Associativity) For any $x,y,z \in F$, we have $x\cdot (y + z) = x\cdot y + x\cdot z$.
+	\end{itemize}
+	\end{definition}
+	
+	In other words, $F$ is an abelian group under addition and $F - \{0\}$ is an abelian group under multiplication, the two operations being linked by the distributive property. From this definition, you can also logically obtain many sort of ``common sense'' facts about fields, e.g., $0\cdot x = 0$ for any $x \in F$, $-x = (-1)\cdot x$ for any $x \in F$, and $(-1)\cdot (-1) = 1$, etc.
+	
+	Galois theory is concerned with the automorphisms of fields. 
+	
+	\begin{definition}\label{D:3:2}
+	A Galois automorphism of a field $F$ is any function $\sigma: F \to F$ satisfying the following properties:
+	\begin{itemize}
+		\item[1.] $\sigma$ is bijective.
+		\item[2.] $\sigma$ distributes over both addition and multiplication and also distributes through inverses.
+		\item[3.] $\sigma(1) = 1$ and $\sigma(0) = 0$.
+	\end{itemize}
+	\end{definition}
+
+	The set of all Galois automorphisms of a field form a group under composition, usually denoted as $\Gal(F)$, the so-called Galois group of $F$. More generally however, we are concerned about Galois groups of ``field extensions,'' a field extension essentially just being a pair consisting of a field $F$ and some subfield $K$, usually denoted as $F/K$. The main idea behind defining field extensions is that we think of the larger field as being a vector space with coefficients being from the smaller field. The Galois group of $F/K$ is defined as the set
+	
+	$$\Gal(F/K) := \{\sigma \in \Gal(F)\; | \; \sigma(k) = k \mbox{ for all } k \in K\}.$$  
+	
+	Under certain nice circumstances (specifically when a field extension is ``Galois''), there is a certain nice relationship between subgroups of the Galois group $\Gal(F/K)$ and the fields lying between $F$ and $K$, which is described by the Fundamental Theorem of Galois Theory. Since we are working with cyclotomic fields and cyclotomic fields are very well behaved, we will never have to worry about these kinds of considerations.
+	
+	Since we are working with $\Zn$, the field extension we care about the most is $\Q(\zeta_9)/\Q$. Here, $\Q(\zeta_9)$ is the field consisting of all possible expressions of rational numbers and a primitive ninth root of unity. We can describe the Galois automorphisms explicitly in this case.
+	
+	First, let $K$ be any field which contains the rational numbers. Then, any $\sigma \in \Gal(K)$ fixes each element of $\Q$. This follows from the fact that $\sigma(1) = 1$ and $\sigma$ distributes over all operations. For instance, we have
+	
+	$$
+	\sigma(n) = \sigma(1 + 1 + \ldots + 1) = \sigma(1) + \sigma(1) + \ldots + \sigma(1) = n
+	$$ and
+	$$
+	\sigma(n/m) = \sigma(n)/\sigma(m) = n/m
+	$$
+	for $n,m \in \Z$. This also means that $\Gal(\Q(\zeta_9)/\Q) = \Gal(\Q(\zeta_9))$
+	
+	The key observation now, is that since the only irrational generator of $\Q(\zeta_9)$ is $\zeta_9$, any Galois automorphism $\sigma$ is defined by what $\sigma$ does to $\zeta_9$. Now $\zeta_9$ satisfies the polynomial $x^9 - 1 = 0$, but is not a root of any smaller degree polynomial. Thus, the same applies to $\sigma(\zeta_9)$, i.e., $\sigma(\zeta_9)^9 - 1 = 0$. We conclude that $\sigma(\zeta_9)$ must also be a primitive ninth root of unity. Since there are six primitive ninth roots of unity, we obtain six distinct Galois automorphisms. If we write $x \in \Q(\zeta_9)$ as $x = \sum_{i=0}^5 c_i \zeta_9^i$ for $c_i \in \Q$, then an automorphism will take the following form
+	
+	$$
+		\sigma(x) = \sum_{i=0}^5 c_i \zeta_9^{ki}
+	$$  
+	where $k \in \{1,2,4,5,7,8\}$. In particular, we see that $k$ may be any element from a set of representatives for the multiplicative group of integers modulo 9. This generalizes to all integers:
+	
+	\begin{theorem}\label{T:3:3}
+		Let $\zeta_n$ be any primitive $n$-th root of unity. The Galois group $\Gal(\Q(\zeta_n))$ is naturally group isomorphic to the multiplicative group of integers modulo $n$, $\mathbb{Z}_n^{\times}$. An isomorphism is given by $n \longmapsto \sigma_k$ where $\sigma_k$ is defined by $\sigma(\zeta_n) = \zeta_n^k$.
+	\end{theorem}
+	We remark that in the case of the Eisenstein integers, $\Gal(\Q(\zeta_3))$ has only two elements: the identity automorphism and complex conjugation.
+	
+	Now, as a consequence of the Fundamental Theorem of Galois Theory, we obtain a result that will allow us to define the field norm.
+	
+	\begin{theorem}\label{T:3:4}
+		Let $F/K$ be any Galois extension (such as $\Q(\zeta_9)/\Q$). Then, $x \in F$ is fixed by each element of $\Gal(F/K)$ iff $x \in K$.
+	\end{theorem}
+	
+	This is not necessarily true in extensions that are not Galois, but since we are dealing with cyclotomic fields, the theorem applies. 
+	
+	Assume we take $x \in F$ for some Galois extension $F/K$. The field norm is defined as the product of all Galois conjugates of $x$ from the Galois group $\Gal(F/K)$:
+	$$
+	N_{F/K}(x) = \prod_{\sigma \in Gal(F/K)} \sigma(x)
+	$$
+	Notice now that applying any Galois automorphism to $N_{F/K}(x)$ simply permutes the factors of the product since Galois automorphisms distribute over multiplication. In other words, $N_{F/K}(x)$ is fixed by all Galois automorphisms, and so, $N_{F/K}(x) \in K$. In our own case, we obtain:
+	
+	\begin{proposition}\label{P:3:5}
+		Let $a \in \Zn$. Then $N_{\Q(\zeta_9)/\Q}(a) \in \Z$. 
+	\end{proposition}
+	
+	\begin{proof}
+		The above paragraph implies that $N_{\Q(\zeta_9)/\Q}(a) \in \Q$, but since all Galois conjugates of an element in $\Zn$ also lie in $\Zn$, so too must their product. So $N_{\Q(\zeta_9)/\Q}(a) \in \Q\cap \Zn = \Z$. 
+	\end{proof}
+	
+	We are now able to describe an algorithm for solving $ax = b$ in $\Zn$. We set $$a' = \prod_{\sigma \in \Gal(\Q(\zeta_9)) - \{1\}}\sigma(a),$$ the product of all nonidentity Galois conjugates of $a$. In the remainder and for a lack of standard terminology, we will refer to $a'$ as the \emph{partial field norm} of $a$. Now,
+	
+	$$
+	x = \dfrac{ba'}{aa'} = \dfrac{ba'}{N_{\Q(\zeta_9)/\Q}(a) }
+	$$
+	
+	Now, the denominator on the right is a field norm of an element of $\Zn$ and is therefore an integer. Now, Proposition \ref{P:2:5} allows us to test precisely whether $ba'$ is divisible by this integer. If so, then the solution $x$ is found by dividing each coefficient of $ba'$ by the field norm. If not, then the solution $x$ does not lie in $\Zn$. This process can be written into code. 
+	
+	For simplicity, since we are working exclusively with the field extension $\Q(\zeta_9)/\Q$, we will let $N$ denote the field norm $N_{\Q(\zeta_9)/\Q}$, and we shall also let $PN$ denote the partial field norm. We remark that for any $a \in \Zn$, we have that $PN(a) \in \Zn$ and $PN(a) = N(a)/a$. Also, to clarify, we remark that while $N(a)$ is always a rational integer, $PN(a)$ is generally not. 
+	
+	\section{The Enumeration Step}
+	
+	As in the original algorithm, our algorithm attempts to find an approximation in which each entry has $\sde_3$ equal to zero. If no suitable unitary matrix is found, then the algorithm seeks an approximation of $\sde_3$ one higher. This process repeats until a suitable approximation is found. We will let $f$ denote the $\sde_3$ considered for a given iteration.
+	
+	We begin a given iteration by finding all candidates for the diagonal entries of an approximation $V$ of $R_{(0,1)}^Z(\theta)$:
+	
+	
+	$$V = \dfrac{1}{3^f}
+		\begin{bmatrix}
+		x_1 & y_1 & z_1 \\
+		x_2 & y_2 & z_2 \\
+		x_3 & y_3 & z_3
+	\end{bmatrix}	$$
+	where each entry of the above matrix is assumed to lie in $\Zn$. For instance, listing all potential candidates for $x_1$ can be done by finding all $x_1 \in \Zn$ such that
+	
+	$$
+	|e^{-i\theta/2} - x_1/3^f|^2 = 2 - \dfrac{2}{3^f} \Re(x_1e^{i\theta/2}) \leq \epsilon^2
+	$$ 
+	since our approximation is measured using the Frobenius norm. Setting $\eta(\epsilon) = 1 - \epsilon^2/2$, we can describe the conditions necessary for each of the diagonal entries:
+	
+	\begin{equation}\label{diag:1}
+		\Re(x_1e^{\theta/2}) \geq 3^f\eta(\epsilon),
+	\end{equation}
+	\begin{equation}\label{diag:2}
+		\Re(y_2e^{-\theta/2}) \geq 3^f\eta(\epsilon),
+	\end{equation} and
+	\begin{equation}\label{diag:3}
+		\Re(z_3) \geq 3^f\eta(\epsilon).
+	\end{equation}
+	
+	The unitarity of the approximation allows us to impose bounds on the absolute values of diagonal candidates. Namely,
+	
+	\begin{equation}\label{diag:4}
+		|x_1|, |y_2|, |z_3| \leq 3^f.
+	\end{equation}
+	
+	The inequalities \eqref{diag:1}, \eqref{diag:2}, \eqref{diag:3}, and \eqref{diag:4} are our versions of the inequalities (19) and (20) from \cite{Gust}. Now, it is possible to represent $\Zn$ as a six--dimensional integer lattice
+	
+	$$
+	\{\mathbf{y} = B\mathbf{x} \; | \; \mathbf{x}\in \Z^6\}
+	$$
+	for some $6 \times 6$ matrix $B$. However, the given matrix is nonsingular of rank two, which complicates things. For example, the low rank prevents us from taking advantage of a Cholesky decomposition or something similar. However, Proposition \ref{P:2:5} allows us to loop over all possible diagonal candidates. Namely, we loop over all elements $a$ of $\Zn$ such that $q(a) \leq 3^{2f}$. For each such iteration, it is checked whether $|a| \leq 3^f$ as in \eqref{diag:4}. We also check that $a$ is not zer oas this can eventually lead to division by zero in Algorithm 4. Then $a$ is checked against the inequalities \eqref{diag:1}, \eqref{diag:2}, and \eqref{diag:3}. The elements of $\Zn$ satisfying any of these three inequalities will be collected into tables, denoted $X_1$, $Y_2$, and $Z_3$ respectively, and saved for later in the iteration. Pseudocode for this step is given in Algorithm 1.
+	
+
+	\section{Filling Below The Diagonal}
+	
+	Once all candidate triples for the main diagonal are determined, we next move to enumerating candidates for $x_3$ for a given choice of a potential diagonal. (The choice to find $x_3$ candidates is somewhat arbitrary as enumerating candidates for any other off-diagonal entry would lead to a more-or-less identical algorithm). We will continue to let $X_1$, $Y_2$, and $Z_3$ denote the sets of all candidates found for $x_1$, $y_2$, and $z_3$ respectively, for a given $f$.
+	
+	One approach is to construct a lookup table for all candidates of $x_3$ similar to what was done for the diagonal candidates. However, we can perform this step somewhat efficiently now. Specifically, $x_3/3^f$ must lie in a unit vector with $x_1/3^f$ as well as a unit vector with $z_3/3^f$ for a given choice of $x_1$ and $z_3$, and so Proposition \ref{P:2:4} implies that
+	
+	$$
+		q(x_3) + q(x_1) \leq 3^{2f} \mbox{ and } q(x_3) + q(z_3) \leq 3^{2f},
+	$$ yielding
+	\begin{equation}
+		q(x_3) \leq 3^{2f} - \max\{q(x_1),q(z_3)\}.
+	\end{equation}
+	
+	Among all candidates for $X_1$, we can find the lowest value taken by $q$, say $x_M$. Likewise, we can find the lowest value taken by $q$ among all elements of $Z_3$, say $z_M$. We set $M := \min\{x_M, z_M\}$. Now, enumerating all candidates $a$ for $x_3$ candidates can be done by looping over all elements of $\Zn$ such that $q(a) \leq 3^{2f} - M$. While looping through these candidates, we can toss away all $a$ such that $|a| \geq 3^{f}\epsilon$. This helps to prevent the lookup table from consuming memory needlessly. The procss is described in Algorithm 2.
+	
+	Looping through the found $x_3$ candidates, we turn to finding candidates for $x_2$ and $y_3$. We are now trying to find all solutions to 
+	
+	$$
+	|x_2|^2 = 3^{2f} - |x_1|^2 - |x_3|^2
+	$$ and $$
+	|y_3|^2 = 3^{2f} - |x_3|^2 - |z_3|^2.
+	$$
+	Attempting to solve these equations algebraically appears to be difficult. The techniques used in \S4 of \cite{Kal} would allow us to rephrase the problem as solving a system of three integral quadratic forms in six variables, but there does not appear to be a way to solve these types of systems for all solutions efficiently. In any case, the number of solutions grows with the number of distinct prime factors of the right hand sides. We can get around this by reusing the lookup table computed already for $x_3$.  It turns out that all candidates for either $x_2$ or $y_3$ will also be in the lookup table, since 
+	
+	$$
+	|x_2|^2 \leq 3^{2f} - |x_1|^2
+	$$ and $$
+	|y_3|^2 \leq 3^{2f} - |z_3|^2.
+	$$
+	This is why we defined $M$ as a minimum and not as a maximum. We also don't need to consider the possibility that the candidates for $x_2$ and $y_3$ have different $\sde_3$ than $f$ by Proposition \ref{P:2:3}, since the entries of any unit vector of $R$ have matching $\sde_3$'s. At this point, we can store the $x_2$ candidates and $y_3$ candidates in tables and loop through all possibilities, which on each iteration gives us a complete set of candidates for the diagonal and all entries below the diagonal. It then remains to attempt to fill the entries above the diagonal, which is handled by \textsc{fillUpper}. This process is described in Algorithm 3.  
+	
+
+	
+	\section{Filling Above The Diagonal}
+	
+	Now, we are assuming that we have candidates for the main diagonal and lower entries. We can now solve algebraically for the remaining entries, taking advantage of the fact that the columns and rows of a unitary matrix are pairwise orthogonal. Our goal is to solve for $y_1$, $z_2$, and $z_3$ using the following equations:
+	
+	\begin{equation}\label{E:6}
+		y_1 = \dfrac{-(\bar{x_2}y_2 + \bar{x_3}y_3)}{\bar{x_1}}
+	\end{equation}
+	\begin{equation}\label{E:7}
+		z_2 = \dfrac{-(\bar{y_3}y_2 + \bar{x_3}x_2)}{\bar{z_3}}
+	\end{equation}
+	\begin{equation}\label{E:8}
+		z_1 = \dfrac{-(\bar{x_2}z_2 + \bar{z_3}y_3)}{\bar{x_1}}
+	\end{equation}
+	
+	As is described in \S3, these equations are of the form $ax = b$, and in this ring, we can determine precisely when no solution exists and solve for an exact solution otherwise. For instance, in \eqref{E:8}, we would multiply the numerator and denominator of the right hand side by the partial field norm of $x_1$:
+	$$
+	y_1 = \dfrac{-(\bar{x_2}y_2 + \bar{x_3}y_3)PN(\bar{x_1})}{\bar{x_1}PN(\bar{x_1})} = \dfrac{-(\bar{x_2}y_2 + \bar{x_3}y_3)PN(\bar{x_1})}{N(\bar{x_1})}
+	$$
+	Solving this equation now amounts to computing the coefficients of $-(\bar{x_2}y_2 + \bar{x_3}y_3)PN(\bar{x_1})$ in the standard basis $\{1,\zeta_9,\zeta_9^2,\ldots,\zeta_9^5\}$ and testing whether each coefficient is divisible by the above norm. If so, then $y_1$ is found by dividing each of the coefficients by the norm, since we do not need to consider the possibility that the solution $y_1$ has a higher $\sde_3$ then the currently known entries. The process is entirely similar for finding $z_2$ and $z_1$. If this can be done, then \textsc{fillUpper} returns its findings back to \textsc{completeUnitary}, where the matrix is tested against the $\epsilon$-condition and for its unitarity. This process is described in Algorithm 4.  
+	
+	The full exhaustive search algorithm is described in Algorithm 5.
+	\newpage
+	
+	\section{Pseudocode}
+	
+	\begin{algorithm}[H]
+		\caption{Diagonal Candidate Enumeration} 
+		\begin{algorithmic}[1]
+			\State \textbf{Data:} $\theta$, $\epsilon$, $f$
+			\State \textbf{Returns:} Three tables, $X_1$, $Y_2$, and $Z_3$
+			\Procedure{enumerateDiagCandidates}{}
+			\For {$a \in \Zn$ such that $q(a) \leq 3^{2f}$}
+			\If {$|a| \leq 3^f$}
+			\If{$\Re(ae^{\theta/2}) \geq 3^f\eta(\epsilon)$}
+			\State Push $a$ to $X_1$. 
+			\EndIf
+			\If{$\Re(ae^{-\theta/2}) \geq 3^f\eta(\epsilon)$}
+			\State Push $a$ to $Y_2$. 
+			\EndIf
+			\If{$\Re(a) \geq 3^f\eta(\epsilon)$}
+			\State Push $a$ to $Z_3$. 
+			\EndIf
+			\EndIf
+			\EndFor
+			\EndProcedure
+		\end{algorithmic} 
+	\end{algorithm}
+	
+	
+	
+		\begin{algorithm}[H]
+		\caption{Enumeration of $x_3$ Candidates} 
+		\begin{algorithmic}[1]
+			\State \textbf{Data:} $\epsilon$, $f$, $M$
+			\State \textbf{Returns:}  A Table $X_3$
+			\Procedure{enumerateX3Candidates}{}
+			\For {$a \in \Zn$ such that $q(a) \leq 3^{2f} - M$}
+			\If {$|a| \leq 3^f\epsilon$}
+			\State Push $a$ to $X_3$. 
+			\EndIf
+			\EndFor
+			\EndProcedure
+		\end{algorithmic} 
+	\end{algorithm}
+	
+	\begin{algorithm}[H]
+		\caption{Complete Unitary} 
+		\begin{algorithmic}[1]
+			\State \textbf{Data:} $x_1$, $y_2$, $z_3$, $X_3$, $\epsilon$, $f$
+			\State \textbf{Returns:} $V$
+			\Procedure{completeUnitary}{}
+			\For {$x_3 \in X_3$}
+			\If {$|x_3|^2 \leq 3^{2f} - |x_1|^2 \; \mathbf{and} \; |x_3|^2 \leq 3^{2f} - |z_3|^2$}
+			\For{$a \in X_3$}
+			\If {$(x_1, a , x_3)^T$ is a unit vector}
+			\State {Push $a$ to $X_2$}
+			\EndIf
+			\If {$(x_3, a , z_3)^T$ is a unit vector}
+			\State {Push $a$ to $Y_3$}
+			\EndIf
+			
+			\For{$x_2 \in X_2$}
+			\For{$y_3 \in Y_3$}
+			\State {$V \gets$ \textsc{fillUpper}($x_1, x_2, x_3, y_2, y_3, z_3, f$)}
+			\If{$V$ is unitary \textbf{and} $\|R_{(0,1)}^Z(\theta) - V\| < \epsilon$}
+			\Return $V$
+			\EndIf		
+			\EndFor 
+			\EndFor
+			\EndFor
+			\EndIf
+			\EndFor
+			\State \Return Zero matrix 
+			\EndProcedure
+		\end{algorithmic} 
+	\end{algorithm}
+	
+	\begin{algorithm}[H]
+		\caption{Find Entries Above Diagonal} 
+		\begin{algorithmic}[1]
+			\State \textbf{Data:} $x_1, x_2, x_3, y_2, y_3, z_3, f$
+			\State \textbf{Returns:}  $y_1, z_1, z_2$ if successful
+			\Procedure{fillUpper}{}
+			\If {$N(\bar{x_1})$ divides each coeff. of $-(\bar{x_2}y_2 + \bar{x_3}y_3)\cdot PN(\bar{x_1})$}
+				\State {$y_1 \gets \dfrac{-(\bar{x_2}y_2 + \bar{x_3}y_3)\cdot PN(\bar{x_1})}{N(\bar{x_1})}$}
+			\Else 
+				\State \Return Zero Matrix
+			\EndIf
+			\If {$N(\bar{z_3})$ divides each coeff. of $-(\bar{y_3}y_2 + \bar{x_3}x_2)\cdot PN(\bar{z_3})$ }
+				\State {$z_2 \gets \dfrac{-(\bar{y_3}y_2 + \bar{x_3}x_2)\cdot PN(\bar{z_3})}{N(\bar{z_3})}$}
+			\Else 
+				\State \Return Zero Matrix
+			\EndIf
+			\If {$N(\bar{x_1})$ divides each coeff. of $-(\bar{x_2}z_2 + \bar{z_3}y_3)\cdot PN(\bar{x_1})$}
+				\State {$z_1 \gets \dfrac{-(\bar{x_2}z_2 + \bar{z_3}y_3)\cdot PN(\bar{x_1})}{N(\bar{x_1})}$}
+			\Else
+				\State \Return Zero Matrix
+			\EndIf
+			
+			\State \Return $y_1, z_1, z_2$
+			
+			\EndProcedure
+		\end{algorithmic} 
+	\end{algorithm}
+	
+	\begin{algorithm}[H]
+		\caption{Exhaustive Search Algorithm} 
+		\begin{algorithmic}[1]
+			\State \textbf{Data:} $\epsilon$, $\theta$
+			\State \textbf{Returns:}  A $3 \times 3$ matrix $V$
+			\Procedure{ESA}{}
+			\State $f \gets 0$.
+			
+			\For {Until $V$ is found}
+			
+			\State $(X_1, Y_2, Z_3) \gets $ \textsc{enumerateDiagCandidates}($\theta, \epsilon, f$)
+			
+			\State $M \gets \min_{a \in X_1 \cup Z_3}\{q(a)\}$.
+			
+			\State $X_3 \gets $ \textsc{enumerateX3Candidates}($\epsilon, f, M$)
+			
+			\For {$(x_1, y_2, z_3) \in X_1 \times Y_2 \times Z_3$}
+			\State $V \gets $ \textsc{completeUnitary}($x_1$, $y_2$, $z_3$, $X_3$, $\epsilon$, $f$)
+			\If {$V$ is not zero matrix }
+			\State \Return $V$
+			\EndIf
+			\EndFor
+			
+			\State $f \gets f + 1$
+			\EndFor
+			\EndProcedure
+		\end{algorithmic} 
+	\end{algorithm}
+
+
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	\begin{thebibliography}{1}
+		
+		\bibitem[1]{EvPar} {\sc S. Evra and O. Parzanchevski}, Arithmeticity, thinness and efficiency
+		of qutrit $\mbox{Clifford}+\mathbf{T}$ gates, arXiv:2401.16120v2, 12 Nov 2024.
+		
+		\bibitem[2]{Gust}  {\sc E. Gustafson et. al.}, Synthesis of Single Qutrit Circuits from $\mbox{Clifford}+\bR$, arXiv:2503.20203v1, 26 Mar 2025.
+		
+		\bibitem[3]{Horn} {\sc A. Horn}, Doubly Stochastic Matrices and the Diagonal of a Rotation Matrix, \emph{American Journal of Mathematics}, \textbf{76}(3) (1954), 620--630.
+				
+		\bibitem[4]{Kal} {\sc A. R. Kalra et. al.}, Synthesis and Arithmetic of Single Qutrit Circuits, arXiv:2311.08696v3, 1 Jan 2024.
+		
+		\bibitem[5]{Lang} {\sc S. Lang}, \emph{Algebraic Number Theory}, Springer-Verlag, Nw York, 1986.
+		
+		%\bibitem[4]{Is} {\sc I. M. Isaacs}, \emph{Character theory of finite groups}, Academic Press, New York, New York, 1976.
+		
+		%\bibitem[5]{Sieg} {\sc C. L. Siegel}, The trace of totally positive and real algebraic integers, \emph{Ann. of Math.} \textbf{46}  (1945), 302--312.
+		
+	\end{thebibliography} 
+	
+
+\end{document}

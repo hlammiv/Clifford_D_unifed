@@ -1,0 +1,14 @@
+
+=== Phase 1: Direct search SKIPPED (eps=0.3 < cum_3(theta)~0.383301, non-Clifford angle) ===
+
+=== Phase 2: Bidirectional BFS (K_f=K_b=4) ===
+bidir_reify: alignment spot-check OK (max Frob 4.71028e-16 over first 5 entries).
+Phase 2 success! N_D=8 Frob=0.238517 v_f=2
+
+=== Summary ===
+Epsilon Diff. Val.: 0.238517 Eps. Cond.: 0.01125
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.238517   (target epsilon = 0.3, passes: YES)
+Total D gates:    8
+Method: bidir(4+4)
+Success!
+JSON output written to sweep_v2_local/h_0.7854_0.3.json

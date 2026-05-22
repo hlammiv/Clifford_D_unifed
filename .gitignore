@@ -1,0 +1,100 @@
+# =============================================================
+# Caches and build artifacts
+# =============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.so
+
+# Numba AOT/JIT caches
+*.nbi
+*.nbc
+
+# Profiling
+callgrind.out.*
+*.prof
+
+# Compiled C++ binaries in hrsa/ and esa/ (build via Makefile)
+hrsa/HRSA_tester
+hrsa/bidir_bfs
+hrsa/bidir_profile
+hrsa/bidir_profile_R
+hrsa/beam_search
+hrsa/bfs_canonical
+hrsa/bfs_cache_test
+hrsa/cliff_index_check
+hrsa/decompose_cli
+hrsa/e0_net_dump
+hrsa/f0_cache_builder
+hrsa/k3_exhaust_test
+hrsa/k23_compare
+hrsa/rf_test
+hrsa/run_file
+hrsa/sk_v2_integration_test
+hrsa/tube_pruned_bfs
+hrsa/tube_filter_test
+hrsa/decompose_tool
+hrsa/*.o
+hrsa/*.d
+esa/ESA_*test
+esa/ESA_tester
+esa/ESA_diag
+esa/ESA_perf_probe
+esa/ESA_x3_bench
+esa/ESA_convention_test
+esa/ESA_e2e_test
+esa/esa_v_check
+esa/lookup_check
+esa/lookup_count
+esa/ringZ9_*test*
+esa/ringZ9_bench
+esa/run_file
+esa/*.o
+esa/*.d
+
+# Source backups
+*.bak
+*.orig
+*.orig.bak
+
+# =============================================================
+# Generated data caches (regenerable from the pipeline)
+# =============================================================
+
+# zeta9 stage 1-5 working data dirs
+zeta9/D/
+zeta9/OLD/
+zeta9/xout.npz
+zeta9/xout.json
+zeta9/xout.row2.npy
+zeta9/xout.profile.json
+zeta9/zeta9/_deg1_inert_table.npy
+
+# Per-sweep per-cell outputs (keep only summary.csv where useful)
+sweep_*/zeta9_*.json
+sweep_*/zeta9_*.log
+sweep_*/hrsa_*.json
+sweep_*/hrsa_*.log
+sweep_*/sweep.log
+
+# scratch outputs in workdir
+xout/
+xout*.npz
+
+# Archive
+zeta9/Zeta9.zip
+
+# =============================================================
+# Editor / OS
+# =============================================================
+.vscode/
+.idea/
+.DS_Store
+*~
+*.swp
+*.swo
+
+# Local-only scratch
+/tmp_*
+/scratch_*

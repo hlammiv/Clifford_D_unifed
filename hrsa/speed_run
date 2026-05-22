@@ -1,0 +1,15 @@
+./HRSA_tester -1.3068975918 1 4 1 >> data/out_a-1.3068975918_e1_f4
+./HRSA_tester -0.8867893873 1 4 1 >> data/out_a-0.8867893873_e1_f4
+./HRSA_tester 0.3147844156 1 4 1 >> data/out_a0.3147844156_e1_f4
+./HRSA_tester -0.2627609172 1 4 1 >> data/out_a-0.2627609172_e1_f4
+./HRSA_tester -1.1175303519 1 4 1 >> data/out_a-1.1175303519_e1_f4
+./HRSA_tester 0.8946003187 0.1 4 1 >> data/out_a0.8946003187_e0.1_f4
+./HRSA_tester -0.6815748986 0.1 4 1 >> data/out_a-0.6815748986_e0.1_f4
+./HRSA_tester 1.3089685476 0.1 4 1 >> data/out_a1.3089685476_e0.1_f4
+./HRSA_tester -0.3620837989 0.1 4 1 >> data/out_a-0.3620837989_e0.1_f4
+./HRSA_tester 0.7862126370 0.1 4 1 >> data/out_a0.7862126370_e0.1_f4
+./HRSA_tester 1.2731568572 0.01 4 1 >> data/out_a1.2731568572_e0.01_f4
+./HRSA_tester 0.1716221383 0.01 4 1 >> data/out_a0.1716221383_e0.01_f4
+./HRSA_tester 0.5838408922 0.01 4 1 >> data/out_a0.5838408922_e0.01_f4
+./HRSA_tester 1.1559449429 0.01 4 1 >> data/out_a1.1559449429_e0.01_f4
+./HRSA_tester 0.0821423948 0.01 4 1 >> data/out_a0.0821423948_e0.01_f4

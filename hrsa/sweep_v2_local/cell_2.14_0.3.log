@@ -1,0 +1,4 @@
+
+=== Phase 1: Direct search SKIPPED (eps=0.3 < cum_3(theta)~0.393068, non-Clifford angle) ===
+
+=== Phase 2: Bidirectional BFS (K_f=K_b=4) ===

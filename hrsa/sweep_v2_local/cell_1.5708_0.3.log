@@ -1,0 +1,14 @@
+
+=== Phase 1: Direct search (D-count 0-3) ===
+Direct search: 648 Cliffords, eps=0.3
+  k=0: best=1.08239459992881
+  k=1: best=0.123376853265012
+  Found at k=1!
+
+=== Summary ===
+Epsilon Diff. Val.: 0.123377 Eps. Cond.: 0.01125
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.123377   (target epsilon = 0.3, passes: YES)
+Total D gates:    1
+Method: Direct
+Success!
+JSON output written to sweep_v2_local/h_1.5708_0.3.json

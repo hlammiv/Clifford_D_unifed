@@ -1,0 +1,10 @@
+{
+  "backend": "hrsa",
+  "f_input": 2,
+  "actual_sde_3": 2,
+  "is_unitary": true,
+  "frobenius": 0.23851691791100227,
+  "epsilon": 0.3,
+  "epsilon_pass": true,
+  "all_checks_pass": true
+}

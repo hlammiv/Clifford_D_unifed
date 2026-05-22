@@ -1,0 +1,45 @@
+
+=== Phase 1: Direct search SKIPPED (eps=0.1 < cum_3(theta)~0.251006, non-Clifford angle) ===
+
+=== Phase 2: bidir SKIPPED (eps too tight for K<=5) ===
+
+=== Phase 3: HRSA search ===
+HRSA_bestD: max_solns=10, OMP threads=16
+Enumerating entry candidates for f = 0.
+Finished enumerating entry possibilities for f = 0.
+Enumerating entry candidates for f = 1.
+Finished enumerating entry possibilities for f = 1.
+Enumerating entry candidates for f = 2.
+Finished enumerating entry possibilities for f = 2.
+Found 10 candidate(s) at f=2. Decomposing each to find minimum D-count...
+[canonical_lookup] built 953532 entries in 15.92 s (depth=2, alphabet=8748)
+  Candidate 1/10: D_gates=19
+  Candidate 2/10: D_gates=29
+  Candidate 3/10: D_gates=29
+  Candidate 4/10: D_gates=19
+  Candidate 5/10: D_gates=29
+  Candidate 6/10: D_gates=19
+  Candidate 7/10: D_gates=29
+  Candidate 8/10: D_gates=19
+  Candidate 9/10: D_gates=29
+  Candidate 10/10: D_gates=19
+Epsilon Diff. Val.: 0.00117195 Eps. Cond.: 0.00125
+Selected candidate 1 with 19 D-gate(s).
+Success!
+x_1: (1/3^2)(6z^0 + -1z^1 + -1z^2 + 6z^3 + -2z^4 + -4z^5) 0.977215
+x_2: (1/3^2)(-3z^0 + -7z^1 + 6z^2 + -1z^4 + 3z^5) 1.02221
+x_3: (1/3^2)(1z^0 + -3z^1 + 3z^2 + 2z^3 + -5z^4 + 3z^5) 0.0116141
+Target x_1 = e^(i theta/2) : 0.876309 + i0.481749
+Found x_1 (should be close to Target x_1): 0.855385 + i0.472511
+Found x_2 (should be close to -1): -1.0222 + i0.00458363
+Found x_3 (should be close to 0): 0.0113552 + i0.0024389
+Squared Frobenius norm of vector (should be exactly 2): 2
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.0683637   (target epsilon = 0.1, passes: YES)
+
+=== Summary ===
+Epsilon Diff. Val.: 0.0683637 Eps. Cond.: 0.00125
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.0683637   (target epsilon = 0.1, passes: YES)
+Total D gates:    19
+Method: HRSA(f=2)
+Success!
+JSON output written to sweep_v2_local/h_1.0053_0.1.json

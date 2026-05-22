@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+eps1="1e-2"
+eps0="1e-2"
+eps="${eps1}" #+${eps0}"
+f="4"
+
+mpi="mpirun -n 16"
+
+echo "*** Norms for u=0 ***"
+if [[ ! -f "D/Y1_f=${f}_u=0_eps=${eps0}.npy" ]]; then
+$mpi python -m zeta9_vector.collect_targets \
+    --f "${f}" \
+    --norm 1 \
+    --u 0 \
+    --eps "${eps0}" \
+    --eps_bin_width 0 \
+    --output "D/Y1_f=${f}_u=0_eps=${eps0}" \
+    --resume
+fi
+
+echo "*** Norms for u=1 ***"
+if [[ ! -f "D/Y1_f=${f}_u=1_eps=${eps1}.npy" ]]; then
+$mpi python -m zeta9_vector.collect_targets \
+    --f "${f}" \
+    --norm 1 \
+    --u 1 \
+    --eps "${eps1}" \
+    --eps_bin_width 0 \
+    --output "D/Y1_f=${f}_u=1_eps=${eps1}" \
+    --resume
+fi
+
+echo "*** Doubles ***"
+if [[ ! -f "D/TM2_f=${f}_eps=${eps}" ]]; then
+$mpi sage -python -m zeta9_vector.select_doubles_optimized \
+  --inputs1 "D/Y1_f=${f}_u=1_eps=${eps1}.npy" \
+  --inputs2 "D/Y1_f=${f}_u=0_eps=${eps0}.npy" \
+  --f "${f}" \
+  --output "D/TM2_f=${f}_eps=${eps}" \
+  --norm 1 \
+  --resume
+fi
+
+
+echo "*** Roots ***"
+$mpi sage -python -m zeta9_vector.find_roots_exact_doubles_v2 \
+  --doubles_file "D/TM2_f=${f}_eps=${eps}" \
+  --doubles_json "D/TM2_f=${f}_eps=${eps}.manifest.json" \
+  --no_legacy_fallback \
+  --rootdb_prefix "D/RM2_f=${f}_eps=${eps}_local" \
+  --global_rootdb_prefix "D/RM2_f=${f}_global" \
+  --resume
+
+echo "*** Sidecar ***"
+$mpi sage -python -m zeta9_vector.build_phase_sidecar_binned_mpi \
+  --rootdb_prefix "D/RM2_f=${f}_eps=${eps}_local" 
+
+
+echo "*** Metadata ***"
+$mpi sage -python -m zeta9_vector.build_double_chunk_metadata \
+  --doubles_file "D/TM2_f=${f}_eps=${eps}" \
+  --doubles_json "D/TM2_f=${f}_eps=${eps}.manifest.json" \
+  --rootdb_prefix "D/RM2_f=${f}_eps=${eps}_local" \
+  --output_prefix "D/RM2_f=${f}_eps=${eps}_triples_chunk_meta" \
+  --doubles_chunk_rows 200000

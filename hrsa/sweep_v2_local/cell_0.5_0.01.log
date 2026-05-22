@@ -1,0 +1,47 @@
+
+=== Phase 1: Direct search SKIPPED (eps=0.01 < cum_3(theta)~0.285376, non-Clifford angle) ===
+
+=== Phase 2: bidir SKIPPED (eps too tight for K<=5) ===
+
+=== Phase 3: HRSA search ===
+HRSA_bestD: max_solns=10, OMP threads=16
+Enumerating entry candidates for f = 0.
+Finished enumerating entry possibilities for f = 0.
+Enumerating entry candidates for f = 1.
+Finished enumerating entry possibilities for f = 1.
+Enumerating entry candidates for f = 2.
+Finished enumerating entry possibilities for f = 2.
+Enumerating entry candidates for f = 3.
+Finished enumerating entry possibilities for f = 3.
+Found 10 candidate(s) at f=3. Decomposing each to find minimum D-count...
+[canonical_lookup] built 953532 entries in 15.12 s (depth=2, alphabet=8748)
+  Candidate 1/10: D_gates=49
+  Candidate 2/10: D_gates=49
+  Candidate 3/10: D_gates=49
+  Candidate 4/10: D_gates=49
+  Candidate 5/10: D_gates=49
+  Candidate 6/10: D_gates=49
+  Candidate 7/10: D_gates=48
+  Candidate 8/10: D_gates=46
+  Candidate 9/10: D_gates=46
+  Candidate 10/10: D_gates=48
+Epsilon Diff. Val.: 1.23391e-05 Eps. Cond.: 1.25e-05
+Selected candidate 8 with 46 D-gate(s).
+Success!
+x_1: (1/3^3)(16z^0 + -1z^1 + -1z^2 + 8z^3 + -6z^4 + -10z^5) 0.997556
+x_2: (1/3^3)(-15z^0 + 13z^1 + 2z^2 + -6z^3 + 6z^4 + 21z^5) 1.00244
+x_3: (1/3^3)(-12z^0 + -4z^1 + 9z^2 + -12z^3 + 2z^4 + -10z^5) 0.000618406
+Target x_1 = e^(i theta/2) : 0.968912 + i0.247404
+Found x_1 (should be close to Target x_1): 0.966496 + i0.246988
+Found x_2 (should be close to -1): -1.00244 + i-2.22274e-05
+Found x_3 (should be close to 0): 0.000599881 + i0.00015023
+Squared Frobenius norm of vector (should be exactly 2): 2
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.00701867   (target epsilon = 0.01, passes: YES)
+
+=== Summary ===
+Epsilon Diff. Val.: 0.00701867 Eps. Cond.: 1.25e-05
+Matrix Frobenius distance ||X_(0,1) H - R_(0,1)^Z(theta)||_F = 0.00701867   (target epsilon = 0.01, passes: YES)
+Total D gates:    46
+Method: HRSA(f=3)
+Success!
+JSON output written to sweep_v2_local/h_0.5_0.01.json

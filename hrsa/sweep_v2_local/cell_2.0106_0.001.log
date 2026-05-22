@@ -1,0 +1,16 @@
+
+=== Phase 1: Direct search SKIPPED (eps=0.001 < cum_3(theta)~0.407709, non-Clifford angle) ===
+
+=== Phase 2: bidir SKIPPED (eps too tight for K<=5) ===
+
+=== Phase 3: HRSA search ===
+HRSA_bestD: max_solns=10, OMP threads=16
+Enumerating entry candidates for f = 0.
+Finished enumerating entry possibilities for f = 0.
+Enumerating entry candidates for f = 1.
+Finished enumerating entry possibilities for f = 1.
+Enumerating entry candidates for f = 2.
+Finished enumerating entry possibilities for f = 2.
+Enumerating entry candidates for f = 3.
+Finished enumerating entry possibilities for f = 3.
+Enumerating entry candidates for f = 4.

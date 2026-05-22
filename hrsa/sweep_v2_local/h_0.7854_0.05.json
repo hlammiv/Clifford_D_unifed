@@ -1,0 +1,56 @@
+{
+  "identification": {
+    "backend": "hrsa",
+    "version": "hrsa-2026-05",
+    "command_line": ["./HRSA_tester", "0.7854", "0.05", "6", "--max-direct", "3", "--use-bidir", "5", "--max-solns", "10", "--json", "sweep_v2_local/h_0.7854_0.05.json"],
+    "host": "lucia",
+    "timestamp": "2026-05-09T21:35:28Z",
+    "schema_version": "1.0"
+  },
+  "inputs": {
+    "theta": 0.7854,
+    "epsilon": 0.05,
+    "max_f": 6,
+    "c": 1,
+    "max_solns": 10,
+    "max_direct": 3
+  },
+  "achieved": {
+    "success": true,
+    "achieved_frob": 0.026043,
+    "epsilon_passed": true,
+    "f_level": 4,
+    "method": "HRSA(f=2)"
+  },
+  "unitary": {
+    "ring": "Z[zeta_9, 1/3]",
+    "basis": "1, zeta9, zeta9^2, zeta9^3, zeta9^4, zeta9^5",
+    "f": 4,
+    "V": [
+      [[-1, 14, -30, -17, -26, -40], [11, -35, 35, 0, -22, 13], [28, 5, -29, 19, 22, -4]],
+      [[8, 41, -41, 0, 37, -4], [16, 30, -14, 17, -10, -40], [6, 5, -10, 15, -9, 10]],
+      [[-9, 10, -5, -15, 20, -14], [9, 29, -5, -19, 25, 17], [62, -6, 6, 0, -15, -9]]
+    ]
+  },
+  "decomposition": {
+    "N_D": 33,
+    "N_C": null,
+    "N_total": null,
+    "sde_chi_initial": 24,
+    "sde_chi_final": 0,
+    "syllables": [{"a0": 0, "a1": 2, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 6, "a1": 1, "a2": 0, "eps": 0, "delta": 2, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 1, "a1": 0, "a2": 0, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 7, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 2, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 7, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 7, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 8, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 4, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 1, "a2": 5, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 2, "a2": 1, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 3, "eps": 0, "delta": 0, "has_H": true}, {"a0": 2, "a1": 0, "a2": 0, "eps": 0, "delta": 0, "has_H": true}, {"a0": 0, "a1": 0, "a2": 6, "eps": 0, "delta": 0, "has_H": true}]
+  },
+  "sanity_checks": {
+    "unitarity_residual": 0,
+    "frobenius_check_passed": true,
+    "decompose_roundtrip_passed": null
+  },
+  "performance": {
+    "wall_seconds": 16.6835,
+    "cpu_seconds": 16.6835,
+    "max_rss_kb": 0,
+    "threads": 16,
+    "mpi_ranks": null
+  },
+  "errors": []
+}

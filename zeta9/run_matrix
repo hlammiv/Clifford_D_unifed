@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+eps1="2.5e-3"
+eps0="2.5e-3"
+f="4"
+
+mpi="mpirun -n 32"
+PYTHONUNBUFFERED=1
+
+if [[ "${eps1}" == "${eps0}" ]]; then
+    eps="${eps1}"
+else
+    eps="${eps1}+${eps0}"
+fi
+
+echo "Label: <${eps}>"
+
+echo "*** Norms for u=0 ***"
+if [[ ! -f "D/Y1_f=${f}_u=0_eps=${eps0}.npy" ]]; then
+$mpi python3 -m zeta9.collect_targets \
+    --f "${f}" \
+    --norm 1 \
+    --u 0 \
+    --eps "${eps0}" \
+    --eps_bin_width 0 \
+    --output "D/Y1_f=${f}_u=0_eps=${eps0}" \
+    --resume
+fi
+
+echo "*** Norms for u=1 ***"
+if [[ ! -f "D/Y1_f=${f}_u=1_eps=${eps1}.npy" ]]; then
+$mpi python3 -m zeta9.collect_targets \
+    --f "${f}" \
+    --norm 1 \
+    --u 1 \
+    --eps "${eps1}" \
+    --eps_bin_width 0 \
+    --output "D/Y1_f=${f}_u=1_eps=${eps1}" \
+    --resume
+fi
+
+echo "*** Triples ***"
+if [[ ! -f "D/TM_f=${f}_eps=${eps}" ]]; then
+$mpi sage -python -m zeta9.select_triples_optimized \
+  --inputs1 "D/Y1_f=${f}_u=1_eps=${eps1}.npy" \
+  --inputs2 "D/Y1_f=${f}_u=0_eps=${eps0}.npy" \
+  --inputs3 "D/Y1_f=${f}_u=0_eps=${eps0}.npy" \
+  --f "${f}" \
+  --output "D/TM_f=${f}_eps=${eps}" \
+  --norm 1 \
+  --resume
+fi
+
+echo "*** Roots ***"
+if [[ ! -f "D/RM_f=${f}_eps=${eps}_local.roots.json" ]]; then
+$mpi sage -python -m zeta9.find_roots_exact_v2 \
+  --triples_file "D/TM_f=${f}_eps=${eps}" \
+  --triples_json "D/TM_f=${f}_eps=${eps}.manifest.json" \
+  --no_legacy_fallback \
+  --rootdb_prefix "D/RM_f=${f}_eps=${eps}_local" \
+  --global_rootdb_prefix "D/RM_f=${f}_global" \
+  --resume
+fi
+
+echo "*** Sidecar ***"
+if [[ ! -f "D/RM_f=${f}_eps=${eps}_local.phase_sidecar_binned_bins=512.meta.json" ]]; then
+$mpi sage -python -m zeta9.build_phase_sidecar_binned_mpi \
+  --rootdb_prefix "D/RM_f=${f}_eps=${eps}_local" 
+fi
+
+echo "*** Metadata ***"
+if [[ ! -f "D/RM_f=${f}_eps=${eps}_triples_chunk_meta.json" ]]; then
+$mpi sage -python -m zeta9.build_triple_chunk_metadata \
+  --triples_file "D/TM_f=${f}_eps=${eps}" \
+  --triples_json "D/TM_f=${f}_eps=${eps}.manifest.json" \
+  --rootdb_prefix "D/RM_f=${f}_eps=${eps}_local" \
+  --output_prefix "D/RM_f=${f}_eps=${eps}_triples_chunk_meta" \
+  --triples_chunk_rows 200000
+fi

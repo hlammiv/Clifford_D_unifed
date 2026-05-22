@@ -1,0 +1,9 @@
+#!/bin/bash
+
+eps="3e-6"
+
+f="5"
+n="2"
+
+sage -python -m zeta9.build_phase_sidecar_binned_mpi \
+  --rootdb_prefix "D/R${n}_f=${f}_eps=${eps}_local" 

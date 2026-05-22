@@ -1,0 +1,15 @@
+#!/bin/bash
+
+eps="1e-5"
+
+f="4"
+
+out="D/TM_f=${f}_eps=${eps}"
+sage -python -m zeta9_vector.select_triples_optimized \
+  --inputs1 "D/Y1_f=${f}_u=1_eps=${eps}.npy" \
+  --inputs2 "D/Y1_f=${f}_u=0_eps=${eps}.npy" \
+  --inputs3 "D/Y1_f=${f}_u=0_eps=${eps}.npy" \
+  --f "${f}" \
+  --output "${out}" \
+  --norm 1
+
