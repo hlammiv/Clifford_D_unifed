@@ -1,6 +1,37 @@
+from collections import OrderedDict
 from itertools import product
 import math, time
 from sage.all import CyclotomicField, NumberField, QQ, RealField, ZZ, polygen, factor, matrix, vector, pari
+
+
+# Memory refactor #5 (2026-05-22): cap module-level caches so long sweeps don't
+# accumulate unbounded RSS. Each cache below uses BoundedDict(_CACHE_MAX_ENTRIES).
+# Default cap is generous (200k) — the rare cache miss from eviction is cheap.
+_CACHE_MAX_ENTRIES = 200_000
+
+
+class BoundedDict(OrderedDict):
+    """OrderedDict with LRU eviction at max_entries. Drop-in for dict in
+    cache-get-set patterns: `cache.get(key)` and `cache[key] = value`.
+    Bounds RAM growth without changing call sites."""
+    __slots__ = ("_max_entries",)
+
+    def __init__(self, max_entries=_CACHE_MAX_ENTRIES):
+        super().__init__()
+        self._max_entries = int(max_entries)
+
+    def __setitem__(self, key, value):
+        if key in self:
+            super().move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > self._max_entries:
+            super().popitem(last=False)
+
+    def get(self, key, default=None):
+        if key in self:
+            super().move_to_end(key)
+            return super().__getitem__(key)
+        return default
 
 # Action 2 (2026-05-12): turn OFF Sage's "proof" mode for number-field operations.
 #
@@ -77,8 +108,8 @@ def factor_ideal_compat(I):
 
 # PARI-direct factorization cache (validated 2026-05-12: ~2× speedup, all
 # factorizations identical to Sage I.factor() on 8 sample Y triples).
-_FIELD_PARI_NF_CACHE = {}
-_FIELD_PARI_BNF_CACHE = {}
+_FIELD_PARI_NF_CACHE = BoundedDict(max_entries=64)   # keyed by id(F); few distinct fields
+_FIELD_PARI_BNF_CACHE = BoundedDict(max_entries=64)
 
 
 def _get_pari_nf(F):
@@ -229,7 +260,7 @@ def classify_prime_in_extension(P, K, emb):
 
 
 
-_CLASSIFY_EXTENSION_CACHE = {}
+_CLASSIFY_EXTENSION_CACHE = BoundedDict()
 
 
 def _elt_key(g):
@@ -943,7 +974,7 @@ class UnitNormSolver:
         }
         
 
-_UNIT_NORM_SOLVER_CACHE = {}
+_UNIT_NORM_SOLVER_CACHE = BoundedDict()
 
 def get_unit_norm_solver(field_data=None):
     if field_data is None:
@@ -971,7 +1002,7 @@ def unit_is_global_norm_in_K_over_F(u, field_data=None):
 # Local p3-adic norm screen modulo p3^k
 # ----------------------------------------------------------------------
 
-_LOCAL_P3_IMAGE_CACHE = {}
+_LOCAL_P3_IMAGE_CACHE = BoundedDict()
 
 def p3_data(field_data=None):
     if field_data is None:
@@ -1210,7 +1241,7 @@ def _build_candidate_ideal_data(analysis):
     return choices
 
 
-_IDEAL_PARI_HNF_CACHE = {}
+_IDEAL_PARI_HNF_CACHE = BoundedDict()
 
 
 def _get_pari_hnf_of_ideal(I):

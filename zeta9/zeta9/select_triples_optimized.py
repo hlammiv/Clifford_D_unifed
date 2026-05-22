@@ -615,13 +615,25 @@ class BucketCache:
         if sz == 0:
             val = (BucketCache._EMPTY_ROWS, BucketCache._EMPTY_KEYS)
         else:
-            raw = np.fromfile(path, dtype=ROW_DTYPE)
+            # Memory refactor #1 (2026-05-22): use np.memmap instead of
+            # np.fromfile. Same-node ranks then share these read-only pages via
+            # the Linux page cache rather than each allocating its own copy.
+            # _unique_sorted_rows() materializes a fresh sorted array (no longer
+            # tied to the mmap), so the cached entry is regular RAM.
+            try:
+                raw = np.memmap(path, dtype=ROW_DTYPE, mode='r')
+            except (ValueError, OSError):
+                # Empty or vanished file → treat as empty
+                raw = np.empty((0,), dtype=ROW_DTYPE)
             if raw.size == 0:
                 val = (BucketCache._EMPTY_ROWS, BucketCache._EMPTY_KEYS)
             else:
                 rows = _unique_sorted_rows(raw.reshape(-1, 3))
                 keys = _pack_rows_int64(rows)
                 val = (rows, keys)
+            # Drop the mmap reference; the materialized rows/keys arrays own
+            # their own memory now.
+            del raw
         self._cache[path] = val
         while len(self._cache) > self.max_entries:
             self._cache.popitem(last=False)
@@ -966,11 +978,17 @@ def select_triples_mpi(
                 print(f"processing B bucket {my_bid+1}/{n_buckets} on rank 0 (completed {done_before}/{n_buckets}, cumulative_rows={manifest.get('rows_written', 0)})")
             b_path = b_bucket_paths[my_bid]
             if os.path.exists(b_path) and os.path.getsize(b_path) > 0:
-                raw = np.fromfile(b_path, dtype=ROW_DTYPE)
+                # Memory refactor #1: mmap so simultaneous loads across ranks
+                # on the same node share via page cache instead of each allocating.
+                try:
+                    raw = np.memmap(b_path, dtype=ROW_DTYPE, mode='r')
+                except (ValueError, OSError):
+                    raw = np.empty((0,), dtype=ROW_DTYPE)
                 if raw.size:
                     b_rows = _unique_sorted_rows(raw.reshape(-1, 3))
                 else:
                     b_rows = np.empty((0, 3), dtype=ROW_DTYPE)
+                del raw
             else:
                 b_rows = np.empty((0, 3), dtype=ROW_DTYPE)
 

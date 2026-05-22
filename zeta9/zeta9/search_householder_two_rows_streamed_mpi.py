@@ -525,28 +525,44 @@ def search_householder_streamed(
         # Per-chunk caches: (Y, target_abs) -> (roots, zs, z_re, z_im).
         # Pre-extracted z.real / z.imag avoid the per-triple ascontiguousarray
         # call inside the pair-filter setup (Round 3, 2026-05-13).
-        large_cache: dict[tuple, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
-        small_cache: dict[tuple, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
+        # LRU-capped (2026-05-22, memory refactor #4): bounds working set so
+        # high-Y-cardinality chunks don't accumulate unbounded RSS at f=6.
+        # Evicted entries are simply re-hydrated on next access from mmap.
+        large_cache: OrderedDict[tuple, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = OrderedDict()
+        small_cache: OrderedDict[tuple, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = OrderedDict()
+        _LRU_CAP = 4096
 
         def get_large(y_tuple):
-            if y_tuple not in large_cache:
-                roots, zs = enumerate_roots_annulus(
-                    y_tuple, locator, phase_meta, batch_cache, 1.0, eps, f
-                )
-                z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
-                z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
-                large_cache[y_tuple] = (roots, zs, z_re, z_im)
-            return large_cache[y_tuple]
+            cached = large_cache.get(y_tuple)
+            if cached is not None:
+                large_cache.move_to_end(y_tuple)
+                return cached
+            roots, zs = enumerate_roots_annulus(
+                y_tuple, locator, phase_meta, batch_cache, 1.0, eps, f
+            )
+            z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
+            z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
+            entry = (roots, zs, z_re, z_im)
+            large_cache[y_tuple] = entry
+            if len(large_cache) > _LRU_CAP:
+                large_cache.popitem(last=False)
+            return entry
 
         def get_small(y_tuple):
-            if y_tuple not in small_cache:
-                roots, zs = enumerate_roots_small(
-                    y_tuple, locator, phase_meta, batch_cache, eps, f
-                )
-                z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
-                z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
-                small_cache[y_tuple] = (roots, zs, z_re, z_im)
-            return small_cache[y_tuple]
+            cached = small_cache.get(y_tuple)
+            if cached is not None:
+                small_cache.move_to_end(y_tuple)
+                return cached
+            roots, zs = enumerate_roots_small(
+                y_tuple, locator, phase_meta, batch_cache, eps, f
+            )
+            z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
+            z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
+            entry = (roots, zs, z_re, z_im)
+            small_cache[y_tuple] = entry
+            if len(small_cache) > _LRU_CAP:
+                small_cache.popitem(last=False)
+            return entry
 
         # Pre-allocated pair-filter output buffers (Round 3, 2026-05-13).
         # Hoisted out of the triple loop to avoid 16 MB of malloc/free per
@@ -879,48 +895,69 @@ def search_householder_streamed_batched(
             needed = np.unique(triples.reshape((-1, 3)), axis=0)
             locator = _build_locator(needed, paths)
 
-        large_cache: dict = {}
-        large_canon_cache: dict = {}  # canonicalized version of large roots (for Y_b only)
-        small_cache: dict = {}
+        # LRU-capped per-chunk caches (memory refactor #4, 2026-05-22). Cap
+        # bounds working set; misses re-hydrate from mmap on next access.
+        large_cache: OrderedDict = OrderedDict()
+        large_canon_cache: OrderedDict = OrderedDict()  # canonicalized version of large roots (for Y_b only)
+        small_cache: OrderedDict = OrderedDict()
+        _LRU_CAP = 4096
 
         def get_large(y_tuple):
-            if y_tuple not in large_cache:
-                roots, zs = enumerate_roots_annulus(
-                    y_tuple, locator, phase_meta, batch_cache, 1.0, eps, f
-                )
-                z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
-                z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
-                large_cache[y_tuple] = (roots, zs, z_re, z_im)
-            return large_cache[y_tuple]
+            cached = large_cache.get(y_tuple)
+            if cached is not None:
+                large_cache.move_to_end(y_tuple)
+                return cached
+            roots, zs = enumerate_roots_annulus(
+                y_tuple, locator, phase_meta, batch_cache, 1.0, eps, f
+            )
+            z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
+            z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
+            entry = (roots, zs, z_re, z_im)
+            large_cache[y_tuple] = entry
+            if len(large_cache) > _LRU_CAP:
+                large_cache.popitem(last=False)
+            return entry
 
         def get_large_canonical(y_tuple):
             """Like get_large but filtered to one rep per ζ_9-torsion orbit.
             Used for Y_b only — canonicalizing one slot factors out the
             18-fold diagonal-torsion redundancy in (a_b, a_c, a_a) tuples."""
-            if y_tuple not in large_canon_cache:
-                full_roots, full_zs, _, _ = get_large(y_tuple)
-                if full_roots.shape[0] == 0:
-                    large_canon_cache[y_tuple] = (full_roots, full_zs,
-                                                  np.empty(0, dtype=np.float64),
-                                                  np.empty(0, dtype=np.float64))
-                else:
-                    keep_idx = _canonical_orbit_indices(full_roots)
-                    cr = np.ascontiguousarray(full_roots[keep_idx], dtype=np.int64)
-                    cz = np.ascontiguousarray(full_zs[keep_idx], dtype=np.complex128)
-                    cze = np.ascontiguousarray(cz.real, dtype=np.float64)
-                    czi = np.ascontiguousarray(cz.imag, dtype=np.float64)
-                    large_canon_cache[y_tuple] = (cr, cz, cze, czi)
-            return large_canon_cache[y_tuple]
+            cached = large_canon_cache.get(y_tuple)
+            if cached is not None:
+                large_canon_cache.move_to_end(y_tuple)
+                return cached
+            full_roots, full_zs, _, _ = get_large(y_tuple)
+            if full_roots.shape[0] == 0:
+                entry = (full_roots, full_zs,
+                         np.empty(0, dtype=np.float64),
+                         np.empty(0, dtype=np.float64))
+            else:
+                keep_idx = _canonical_orbit_indices(full_roots)
+                cr = np.ascontiguousarray(full_roots[keep_idx], dtype=np.int64)
+                cz = np.ascontiguousarray(full_zs[keep_idx], dtype=np.complex128)
+                cze = np.ascontiguousarray(cz.real, dtype=np.float64)
+                czi = np.ascontiguousarray(cz.imag, dtype=np.float64)
+                entry = (cr, cz, cze, czi)
+            large_canon_cache[y_tuple] = entry
+            if len(large_canon_cache) > _LRU_CAP:
+                large_canon_cache.popitem(last=False)
+            return entry
 
         def get_small(y_tuple):
-            if y_tuple not in small_cache:
-                roots, zs = enumerate_roots_small(
-                    y_tuple, locator, phase_meta, batch_cache, eps, f
-                )
-                z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
-                z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
-                small_cache[y_tuple] = (roots, zs, z_re, z_im)
-            return small_cache[y_tuple]
+            cached = small_cache.get(y_tuple)
+            if cached is not None:
+                small_cache.move_to_end(y_tuple)
+                return cached
+            roots, zs = enumerate_roots_small(
+                y_tuple, locator, phase_meta, batch_cache, eps, f
+            )
+            z_re = np.ascontiguousarray(zs.real, dtype=np.float64)
+            z_im = np.ascontiguousarray(zs.imag, dtype=np.float64)
+            entry = (roots, zs, z_re, z_im)
+            small_cache[y_tuple] = entry
+            if len(small_cache) > _LRU_CAP:
+                small_cache.popitem(last=False)
+            return entry
 
         # Global early-exit: if EVERY query has hit max_matches, no more useful work.
         if max_matches > 0 and all(
