@@ -28,6 +28,24 @@ from .roots import actual_roots_from_ideal_search
 _ALPHA = 2.0 * math.cos(2.0 * math.pi / 9.0)  # α = ζ_9 + ζ_9⁻¹ ≈ 1.532
 
 
+# Root coefficients are bounded by ~10 × 3^f (Z[ζ_9] basis decomposition of
+# a norm-bounded ring element). int32 max ≈ 2.15e9; safe up to f≈17 with no
+# margin, so we cut at f=15 for a comfortable 15× safety factor.
+# At ε=10⁻¹⁰ we need f≈21 and must use int64.
+_ROOT_DTYPE_F_MAX_INT32 = 15
+
+
+def pick_root_dtype(f):
+    """Return the numpy dtype to use for storing root coefficients at layer f.
+
+    int32 cuts the sidecar's resident-page RAM ~2× for f ≤ 15. Above that we
+    fall back to int64. Pass f=None to force int64 (legacy / safe default).
+    """
+    if f is None:
+        return np.int64
+    return np.int32 if int(f) <= _ROOT_DTYPE_F_MAX_INT32 else np.int64
+
+
 def _sigma_F_1(m_0, m_1, m_2):
     return float(m_0) + _ALPHA * float(m_1) + _ALPHA * _ALPHA * float(m_2)
 
@@ -294,18 +312,30 @@ def _mark_solved_batch(solved_mask_path, idxs):
         mask.flush()
 
 
-def _pack_roots_flat(root_lists):
+def _pack_roots_flat(root_lists, dtype=np.int64):
     counts = [len(rs) for rs in root_lists]
     off = np.zeros(len(root_lists) + 1, dtype=np.int64)
     if counts:
         off[1:] = np.cumsum(np.asarray(counts, dtype=np.int64))
     total = int(off[-1])
-    flat = np.zeros((total, 6), dtype=np.int64)
+    flat = np.zeros((total, 6), dtype=dtype)
     pos = 0
     for rs in root_lists:
         n = len(rs)
         if n:
-            flat[pos:pos+n, :] = np.asarray(rs, dtype=np.int64)
+            # Stage 3.5 sanity: assert values fit in chosen dtype BEFORE the
+            # silent-truncating assignment. Catches accidental dtype dispatch
+            # at an f too high for int32.
+            src = np.asarray(rs, dtype=np.int64)
+            if dtype != np.int64:
+                _amax = int(np.abs(src).max()) if src.size else 0
+                _limit = int(np.iinfo(dtype).max) // 2
+                assert _amax < _limit, (
+                    f"_pack_roots_flat: root coeff {_amax} exceeds "
+                    f"{dtype.__name__} safety limit {_limit}; raise "
+                    f"_ROOT_DTYPE_F_MAX_INT32 threshold or use int64"
+                )
+            flat[pos:pos+n, :] = src
             pos += n
     return flat, off
 
@@ -319,14 +349,15 @@ def _unpack_roots_flat(flat: np.ndarray, off: np.ndarray, i: int):
     return tuple(tuple(int(x) for x in row) for row in arr)
 
 
-def _append_exact_roots_batch(roots_dir: str, batch_idx: int, root_info: Dict[Tuple[int, int, int], dict]):
+def _append_exact_roots_batch(roots_dir: str, batch_idx: int, root_info: Dict[Tuple[int, int, int], dict],
+                              root_dtype=np.int64):
     os.makedirs(roots_dir, exist_ok=True)
     Ys = []
     roots_lists = []
     for Y, info in root_info.items():
         Ys.append(tuple(int(x) for x in Y))
         roots_lists.append(tuple(info.get("roots_all", ())))
-    roots_flat, roots_off = _pack_roots_flat(roots_lists)
+    roots_flat, roots_off = _pack_roots_flat(roots_lists, dtype=root_dtype)
     out_path = os.path.join(roots_dir, f"roots_batch_{batch_idx:06d}.npz")
     np.savez(out_path, Y=np.asarray(Ys, dtype=np.int64), roots_flat=roots_flat, roots_off=roots_off)
     return out_path
@@ -546,9 +577,15 @@ def find_roots_exact_pipeline(
     eps_target: float = None,
     lazy_f: int = None,
     lazy_u_values: tuple = None,
+    root_dtype_f: int = None,
 ):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
+    root_dtype = pick_root_dtype(root_dtype_f)
+    if rank == 0:
+        print(f"[find_roots] root_dtype_f={root_dtype_f} → "
+              f"storing root coefficients as {root_dtype.__name__}",
+              flush=True)
 
     paths = _state_paths(rootdb_prefix)
     unique_y_path = paths["unique_y"]
@@ -610,7 +647,7 @@ def find_roots_exact_pipeline(
             ckpt = _read_manifest(checkpoint_json)
             if cached_root_info:
                 os.makedirs(paths["exact_roots_dir"], exist_ok=True)
-                _append_exact_roots_batch(paths["exact_roots_dir"], int(ckpt.get("roots_batch_file_index", 0)), cached_root_info)
+                _append_exact_roots_batch(paths["exact_roots_dir"], int(ckpt.get("roots_batch_file_index", 0)), cached_root_info, root_dtype=root_dtype)
                 ckpt["roots_batch_file_index"] = int(ckpt.get("roots_batch_file_index", 0)) + 1
                 ckpt["exact_roots_index_built"] = False
                 _write_manifest(checkpoint_json, ckpt)
@@ -653,12 +690,12 @@ def find_roots_exact_pipeline(
         merged = gather_root_info_batched(comm, local_root_info, root=0, max_items=root_info_batch_items, max_roots=root_info_batch_roots)
         if rank == 0:
             _mark_solved_batch(solved_mask_path, batch_meta["batch_payload"]["idxs"])
-            roots_path = _append_exact_roots_batch(roots_dir, int(ckpt.get("roots_batch_file_index", 0)), merged)
+            roots_path = _append_exact_roots_batch(roots_dir, int(ckpt.get("roots_batch_file_index", 0)), merged, root_dtype=root_dtype)
             batch_file_idx = int(ckpt.get("roots_batch_file_index", 0))
             ckpt["roots_batch_file_index"] = batch_file_idx + 1
             if global_cache_paths is not None:
                 os.makedirs(global_cache_paths["exact_roots_dir"], exist_ok=True)
-                _append_exact_roots_batch(global_cache_paths["exact_roots_dir"], batch_file_idx, merged)
+                _append_exact_roots_batch(global_cache_paths["exact_roots_dir"], batch_file_idx, merged, root_dtype=root_dtype)
                 _invalidate_exact_roots_index(global_cache_paths)
             completed_root_batches += 1
             ckpt["completed_root_batches"] = completed_root_batches
@@ -717,6 +754,12 @@ if __name__ == "__main__":
     parser.add_argument("--lazy_u_values", type=str, default="1.0,1.0,0.0",
                         help="Comma-separated cell u-targets per slot. "
                              "Default Householder (1.0,1.0,0.0). Used by lazy filter.")
+    parser.add_argument("--root_dtype_f", type=int, default=None,
+                        help="zeta9-internal V-denominator exponent (= 2 × wrapper "
+                             "max-f) for dtype dispatch on roots_flat. If f ≤ "
+                             f"{_ROOT_DTYPE_F_MAX_INT32}, root coefficients are stored "
+                             "as int32 (saves ~2× on sidecar mmap pages); otherwise "
+                             "int64. Default None → int64 (safe legacy).")
     args = parser.parse_args()
     _lazy_u_values = tuple(float(x) for x in args.lazy_u_values.split(",")) if args.lazy_u_values else None
 
@@ -737,6 +780,7 @@ if __name__ == "__main__":
         eps_target=args.eps_target,
         lazy_f=args.lazy_f,
         lazy_u_values=_lazy_u_values,
+        root_dtype_f=args.root_dtype_f,
     )
     if MPI.COMM_WORLD.Get_rank() == 0 and args.quiet:
         print(out)

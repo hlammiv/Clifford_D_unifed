@@ -80,14 +80,19 @@ def _existing_sidecar_ok(meta_path: str, n_phase_bins: int) -> dict | None:
 def _build_one_batch(root_path: str, sidecar_dir: str, batch_idx: int, n_phase_bins: int) -> dict:
     data = np.load(root_path, allow_pickle=True, mmap_mode='r')
     Y = np.asarray(data["Y"], dtype=np.int64)
-    roots_flat = np.asarray(data["roots_flat"], dtype=np.int64)
+    # Preserve stage-3's dtype on roots_flat (int32 when f≤15, int64 otherwise).
+    # The .npy header records the dtype; we inherit it for the sidecar so
+    # mmap-resident pages on stage 5 are half-size when int32.
+    roots_flat = np.asarray(data["roots_flat"])
     roots_off = np.asarray(data["roots_off"], dtype=np.int64)
 
-    out_roots = np.empty_like(roots_flat)
+    out_roots = np.empty_like(roots_flat)  # inherits roots_flat dtype
     out_phases = np.empty((roots_flat.shape[0],), dtype=np.float64)
     out_z_re = np.empty((roots_flat.shape[0],), dtype=np.float64)
     out_z_im = np.empty((roots_flat.shape[0],), dtype=np.float64)
-    bin_off = np.zeros((Y.shape[0], int(n_phase_bins) + 1), dtype=np.int64)
+    # bin_off values are cumulative per-bin root counts, bounded by per-Y root
+    # count (~thousands at any f). int32 is plenty and halves resident pages.
+    bin_off = np.zeros((Y.shape[0], int(n_phase_bins) + 1), dtype=np.int32)
 
     for row in range(Y.shape[0]):
         a = int(roots_off[row]); b = int(roots_off[row + 1])
@@ -109,7 +114,8 @@ def _build_one_batch(root_path: str, sidecar_dir: str, batch_idx: int, n_phase_b
         local_bins = np.floor(phases / TWOPI * n_phase_bins).astype(np.int64)
         local_bins = np.clip(local_bins, 0, n_phase_bins - 1)
         counts = np.bincount(local_bins, minlength=n_phase_bins)
-        bin_off[row, 1:] = np.cumsum(counts, dtype=np.int64)
+        # int32 sum is safe: bounded by per-Y root count (~thousands)
+        bin_off[row, 1:] = np.cumsum(counts, dtype=np.int32)
 
     bp = _sidecar_batch_paths(sidecar_dir, batch_idx)
     np.save(bp["roots_flat"], out_roots)

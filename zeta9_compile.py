@@ -403,7 +403,11 @@ def ensure_precompute(workdir, f, eps_pre, mpi, sage_env, dry_run=False,
             "--no_legacy_fallback",
             "--rootdb_prefix", str(arts["stage3_prefix"]),
             "--global_rootdb_prefix", str(arts["stage3_global_prefix"]),
-            "--resume"]
+            "--resume",
+            # Dtype dispatch: int32 when f≤15 (cuts sidecar mmap pages ~2× at
+            # paper-data f ∈ {4,6,8,10,12,14}; auto-flips to int64 at f≥16).
+            # Threshold lives in find_roots_exact_v2._ROOT_DTYPE_F_MAX_INT32.
+            "--root_dtype_f", str(int(f))]
         # Lazy-enum pre-filter: skip Y's whose best_frob bound exceeds ε_target.
         # Per audit zeta9_stage3_optimization_audit.md: 31× wall reduction at
         # ε=1e-4, 130× at 5e-5. f here is the zeta9-internal V-denom exponent.
