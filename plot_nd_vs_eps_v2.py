@@ -103,7 +103,7 @@ def main():
     method_order = [
         "Direct",
         "SignExtClifford",
-        "bidir(0+0)", "bidir(1+1)", "bidir(2+2)", "bidir(3+3)", "bidir(4+4)",
+        "bidir(0+0)", "bidir(1+1)", "bidir(2+2)", "bidir(3+3)", "bidir(4+4)", "bidir(5+5)",
         "HRSA(f=0)", "HRSA(f=1)", "HRSA(f=2)", "HRSA(f=3)", "HRSA(f=4)",
         "zeta9(max-f=0)", "zeta9(max-f=1)", "zeta9(max-f=2)",
         "zeta9(max-f=3)", "zeta9(max-f=4)",
