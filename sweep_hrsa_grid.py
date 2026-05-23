@@ -32,18 +32,21 @@ CSV_FIELDS = [
 ]
 
 
-def run_one(theta, eps, max_f, out_dir, timeout):
+def run_one(theta, eps, max_f, out_dir, timeout, use_bidir=0):
     label = f"t{theta:.6f}_eps{eps:g}".replace(".", "_")
     json_path = out_dir / f"hrsa_{label}.json"
     log_path = out_dir / f"hrsa_{label}.log"
     # --max-solns 20: invoke HRSA_bestD which collects up to 20 valid candidates
     # at the first successful f-level, decomposes each, and returns the one with
-    # min D-count. Without this flag, default max_solns=1 falls back to first-hit
-    # HRSA() which reports loose achieved_frob and a potentially-suboptimal N_D.
-    # See memory `hrsa_first_hit_bias.md` for the 2026-05-23 analysis.
+    # min D-count. See memory `hrsa_first_hit_bias.md`.
+    # --use-bidir N: iterate bidir K=2..N greedily before falling to HRSA — fills
+    # the N_D=2-10 gap left by Direct/SignExtClifford. See memory
+    # `hrsa_first_hit_bias.md` + the cascade_unified_2026-05-23 plan.
     cmd = [str(HRSA_TESTER), repr(theta), str(eps), str(max_f),
            "--max-solns", "20",
            "--json", str(json_path)]
+    if use_bidir > 0:
+        cmd += ["--use-bidir", str(use_bidir)]
     t0 = time.time()
     timed_out = False
     try:
@@ -98,6 +101,9 @@ def main():
                    help="Comma-separated ε values.")
     p.add_argument("--timeout", type=int, default=600,
                    help="Per-cell timeout in seconds. Default 600 (10 min).")
+    p.add_argument("--use-bidir", type=int, default=0,
+                   help="Pass --use-bidir N to HRSA_tester (try bidir K=2..N before HRSA). "
+                        "Default 0 = bidir disabled.")
     p.add_argument("--out_dir", required=True)
     p.add_argument("--resume", action="store_true",
                    help="Skip (theta_idx, epsilon) pairs already in summary.csv.")
@@ -144,7 +150,8 @@ def main():
             if (i, eps) in done:
                 continue
             t0 = time.time()
-            row = run_one(theta, eps, args.max_f, out_dir, args.timeout)
+            row = run_one(theta, eps, args.max_f, out_dir, args.timeout,
+                          use_bidir=args.use_bidir)
             row["theta_idx"] = i
             writer.writerow(row)
             fh.flush()

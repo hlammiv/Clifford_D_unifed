@@ -266,24 +266,22 @@ int main(int argc, char* argv[]){
 	// Removed entirely; the bidirectional BFS approximation below now
 	// occupies the Phase 2 slot and produces exactly-unitary V's.
 
-	// --- Phase 2: Bidirectional BFS approximation (opt-in via --use-bidir) ---
+	// --- Phase 2: Bidirectional BFS, greedy early-exit ---
+	// Iterate K=2..use_bidir. Each K=N searches all Clifford+D words of total
+	// depth ≤ 2N, so first hit is the shortest valid circuit. Calibration:
+	//   K=2 (depth  4)  worst-case Frob ≈ 0.5
+	//   K=3 (depth  6)  worst-case Frob ≈ 0.4
+	//   K=4 (depth  8)  worst-case Frob ≈ 0.25
+	//   K=5 (depth 10)  worst-case Frob ≈ 0.185
+	//   K=6 (depth 12)  worst-case Frob ≈ 0.096 (too slow / too much RAM)
+	// Cost grows ~10x per K step; K=5 is the production ceiling.
 	if (use_bidir > 0 && !found) {
-		// Threshold (calibrated 2026-05-09 over 8 thetas, full sweep):
-		//   K=4 (depth  8) worst-case Frob = 0.2530 at θ=2.14
-		//   K=5 (depth 10) worst-case Frob = 0.1853 at θ=2.14
-		//   K=6 (depth 12) worst-case Frob ≈ 0.096 (too slow for production)
-		// Pick the smallest K such that worst-case Frob < epsilon.
-		int K_needed = -1;
-		if (epsilon > 0.2530)      K_needed = 4;
-		else if (epsilon > 0.1853) K_needed = 5;
-		// (K=6 would handle eps > 0.10 but is too slow for production.)
-
-		if (K_needed > 0 && K_needed <= use_bidir) {
-			cout << "\n=== Phase 2: Bidirectional BFS (K_f=K_b="
-			     << K_needed << ") ===" << endl;
-			BidirCircuit bc = run_bidir(theta, K_needed, K_needed, epsilon);
+		for (int K = 2; K <= use_bidir && !found; ++K) {
+			cout << "\n=== Phase 2." << K << ": Bidirectional BFS (K_f=K_b="
+			     << K << ") ===" << endl;
+			BidirCircuit bc = run_bidir(theta, K, K, epsilon);
 			if (bc.valid && bc.frob_to_target < epsilon) {
-				method = "bidir(" + to_string(K_needed) + "+" + to_string(K_needed) + ")";
+				method = "bidir(" + to_string(K) + "+" + to_string(K) + ")";
 				result_D = bc.N_D;
 				result_frob = bc.frob_to_target;
 				result_f = bc.v_f;
@@ -291,16 +289,17 @@ int main(int argc, char* argv[]){
 				result_V = bc.V;
 				result_V_set = true;
 				found = true;
-				cout << "Phase 2 success! N_D=" << result_D
+				cout << "Phase 2." << K << " success! N_D=" << result_D
 				     << " Frob=" << result_frob
 				     << " v_f=" << result_v_f << endl;
 			} else {
-				cout << "Phase 2 bidir did not find a circuit within eps; "
-				        "falling through." << endl;
+				cout << "  bidir K=" << K << " best Frob=" << bc.frob_to_target
+				     << " (need <" << epsilon << "); trying K=" << (K+1) << endl;
 			}
-		} else {
-			cout << "\n=== Phase 2: bidir SKIPPED (eps too tight for K<="
-			     << use_bidir << ") ===" << endl;
+		}
+		if (!found) {
+			cout << "Phase 2 exhausted K=2.." << use_bidir
+			     << "; falling through to HRSA." << endl;
 		}
 	}
 
