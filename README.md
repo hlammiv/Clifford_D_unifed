@@ -17,6 +17,17 @@ All three emit a **uniform JSON schema** documented in
 [`compile_qutrit_schema.md`](compile_qutrit_schema.md) so cross-backend
 comparisons can be done from a common file format.
 
+### In-progress: Solovay-Kitaev (SK) bootstrap pipeline
+
+A fourth backend is under construction (see `rz_db/` and `u_net/`):
+
+- `rz_db/` — SQLite-backed R_z(θ) lookup DB. Loads from existing HRSA/zeta9
+  sweep CSVs. Used by the SK pipeline to avoid re-spawning HRSA per Euler leaf.
+- `u_net/` — U(3) net builder via Haar sampling + Euler decomposition into
+  R_z leaves. Will support **scaffolded SK** with multiple decade-ε tiers.
+- See `rz_db/PHASE_D_TODO.md` for lazy-population rule that ANY SK
+  consumer of the R_z DB must honor.
+
 ## Layout
 
 ```
@@ -32,11 +43,23 @@ unified/
 ├── HYBRID_DESIGN.md
 ├── hrsa/                   # HRSA C++ source + tester binaries (build via Makefile)
 ├── esa/                    # ESA C++ source + binaries
-└── zeta9/
-    ├── zeta9/              # zeta9 Python package (collect_targets, select_triples_optimized,
-    │                       #   find_roots_exact_v2, search_householder_*_streamed_mpi, …)
-    ├── D/                  # generated data cache  (gitignored)
-    └── *.md                # design / audit notes
+├── zeta9/
+│   ├── zeta9/              # zeta9 Python package (collect_targets, select_triples_optimized,
+│   │                       #   find_roots_exact_v2, search_householder_*_streamed_mpi, …)
+│   ├── D/                  # generated data cache  (gitignored)
+│   └── *.md                # design / audit notes
+├── rz_db/                  # R_z lookup DB for the SK pipeline (Phase A)
+│   ├── rz_lookup.py        # RzLookupDB SQLite class
+│   ├── build_rz_db.py      # CSV → DB ingestor
+│   ├── PHASE_D_TODO.md     # mandatory lazy-population rule for SK consumers
+│   └── test_rz_lookup.py   # 12 tests, all passing
+├── u_net/                  # U(3) net builder (scaffolded SK; Phases B-D)
+│   ├── haar_sampler.py     # Haar SU(3) sampling + dedup + coverage estimate
+│   └── test_haar_sampler.py
+├── sweep_zeta9_batched.py  # C1 batched θ-sweep driver (one mpirun, many queries)
+├── sweep_hrsa_grid.py      # HRSA grid sweep
+├── plot_nd_vs_eps_v2.py    # paper-data N_D vs ε plotter (two-panel, color by method)
+└── nd_vs_eps_v2_*.png      # rendered plots
 ```
 
 ## Quick start
