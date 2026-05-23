@@ -498,6 +498,75 @@ def run_stage5(workdir, f, eps_pre, eps_frob, theta, mpi, sage_env, output_prefi
         raise ValueError(f"mode must be 'diagonal' or 'householder', got {mode!r}")
 
 
+def run_stage5_batched(workdir, f, eps_pre, eps_frob, thetas, mpi, sage_env,
+                       output_dir, dry_run=False, check_local_p3k=False,
+                       mode="householder", query_ids=None):
+    """Run stage 5 in BATCHED mode (one mpirun, many θ sharing one ε).
+
+    Writes per-query results to ``output_dir/q_<id>.npz`` (and ``.json``).
+    Use ``extract_best_v(output_dir + "/q_" + id + ".npz", f)`` to pull each
+    cell's best V.
+
+    Amortizes mpirun startup, Numba JIT, sidecar mmap warmup, root enumeration
+    (``large_cache``/``get_large_canonical``), Sage init, and triple I/O across
+    all queries — typically 2–5× faster per cell than launching ``run_stage5``
+    once per θ.
+
+    V1 constraint (from ``search_householder_streamed_batched``): all queries
+    must share the same ε. Calling code should group cells by (max_f, eps_pre,
+    eps_frob) before invoking.
+
+    Returns wall seconds.
+    """
+    if not thetas:
+        raise ValueError("run_stage5_batched: thetas list is empty")
+    if query_ids is not None and len(query_ids) != len(thetas):
+        raise ValueError(f"query_ids length {len(query_ids)} != thetas length {len(thetas)}")
+
+    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k, mode=mode)
+    env = stages_env(sage_env)
+    py = f"{sage_env}/bin/python"
+    _no_overs = os.environ.get("ZETA9_NO_OVERSUBSCRIBE", "") in ("1", "true", "yes")
+    mpirun = ["mpirun", "-n", str(int(mpi))] + ([] if _no_overs else ["--oversubscribe"])
+
+    if mode == "diagonal":
+        stage5_script = str(ZETA9_DIR / "zeta9" / "search_diagonal_matrix_two_rows_streamed_mpi.py")
+    elif mode == "householder":
+        stage5_script = str(ZETA9_DIR / "zeta9" / "search_householder_two_rows_streamed_mpi.py")
+    else:
+        raise ValueError(f"mode must be 'diagonal' or 'householder', got {mode!r}")
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if query_ids is None:
+        query_ids = [str(i) for i in range(len(thetas))]
+
+    queries = [{"id": str(qid), "theta": float(t), "eps": float(eps_frob)}
+               for qid, t in zip(query_ids, thetas)]
+    queries_path = str(output_dir / "queries.json")
+    with open(queries_path, "w") as fh:
+        json.dump(queries, fh)
+
+    cmd = mpirun + [py, stage5_script,
+        "--triples_file", str(arts["stage2"]),
+        "--triples_json", str(arts["stage2_manifest"]),
+        "--rootdb_prefix", str(arts["stage3_prefix"]),
+        "--f", str(f),
+        "--queries", queries_path,
+        "--output_dir", str(output_dir),
+        "--max_matches", "1000",
+        "--quiet"]
+    return run_cmd(cmd, env, workdir,
+                   f"stage5 batched ({len(queries)} queries @ eps={eps_frob:g})",
+                   dry_run)
+
+
+def batched_query_npz_path(output_dir, query_id):
+    """Path to the per-query stage-5 output npz produced by run_stage5_batched."""
+    return str(Path(output_dir) / f"q_{query_id}.npz")
+
+
 # ----- Householder reconstruction & schema JSON emission -----
 
 def householder_v_from_u(u_coeffs, f):
