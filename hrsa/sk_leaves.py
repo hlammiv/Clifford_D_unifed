@@ -38,6 +38,12 @@ from hrsa_bootstrap import bootstrap_target
 from su3_euler import _load_clifford_set
 import sk_ringZ9 as rk
 
+# Default R_z DB path.  Override via the ``RZ_DB_PATH`` env var or by passing
+# an explicit ``rz_db`` instance through ``_get_rz_db`` (see below).
+import os as _os
+_RZ_DB_DEFAULT_PATH = _os.environ.get("RZ_DB_PATH", "/tmp/rz_test.sqlite")
+_RZ_DB_INSTANCE = None  # type: ignore
+
 
 # ---------------------------------------------------------------------------
 #  Static state: 5184-element sign-extended net + permutation Cliffords
@@ -66,6 +72,48 @@ def _build_RZ(i: int, j: int, theta: float) -> np.ndarray:
     M[i, i] = np.exp(-0.5j * theta)
     M[j, j] = np.exp(+0.5j * theta)
     return M
+
+
+def _get_rz_db():
+    """Open (or return the cached) R_z lookup DB instance.
+
+    Phase E rule-4 dispatch uses a module-level singleton so that repeated
+    leaf lookups within a single SK descent share a connection.  The DB
+    path defaults to ``/tmp/rz_test.sqlite`` and is overridable via the
+    ``RZ_DB_PATH`` env var.
+    """
+    global _RZ_DB_INSTANCE
+    if _RZ_DB_INSTANCE is None:
+        # Lazy import so a missing rz_db module doesn't break loading
+        # sk_leaves for the rule-1/2/3 paths.
+        _RZ_DB_PARENT = Path(__file__).resolve().parent.parent
+        if str(_RZ_DB_PARENT) not in sys.path:
+            sys.path.insert(0, str(_RZ_DB_PARENT))
+        from rz_db.rz_lookup import RzLookupDB  # type: ignore
+        _RZ_DB_INSTANCE = RzLookupDB(_RZ_DB_DEFAULT_PATH)
+    return _RZ_DB_INSTANCE
+
+
+def _ringZ9_blob_to_complex(V_blob: np.ndarray, v_f: int) -> np.ndarray:
+    """Convert a (3,3,6) int64 ringZ9 numerator + denom-exponent f to (3,3) complex.
+
+    Matches the convention used by :mod:`u_net.u_net_builder` and the rz_db
+    schema: V[i,j] = sum_k V_blob[i,j,k] * zeta_9^k / 3^v_f.
+    """
+    V = np.asarray(V_blob)
+    if V.shape != (3, 3, 6):
+        raise ValueError(f"expected V_blob shape (3,3,6), got {V.shape}")
+    zeta9 = np.exp(2j * np.pi / 9.0)
+    out = np.zeros((3, 3), dtype=np.complex128)
+    for i in range(3):
+        for j in range(3):
+            s = 0.0 + 0.0j
+            for k in range(6):
+                a = int(V[i, j, k])
+                if a:
+                    s += a * (zeta9 ** k)
+            out[i, j] = s / (3.0 ** int(v_f))
+    return out
 
 
 def _build_subspace_permutations() -> dict:
@@ -310,12 +358,120 @@ def synthesize_leaf(theta: float, eps: float, i: int, j: int) -> dict:
             "hrsa_raw": result,
         }
 
-    # --- Rule 4: tight eps → zeta9 (STUBBED). ---
-    raise NotImplementedError(
-        f"synthesize_leaf eps={eps:.2e} < 0.005 falls to zeta9, which is "
-        f"not yet wired through this module.  See unified/zeta9_compile.py "
-        f"for the wrapper.  Caller: theta={theta_red}, (i,j)=({i},{j})."
-    )
+    # --- Rule 4: tight eps → R_z DB lookup (zeta9 / HRSA-pre-populated). ---
+    #
+    # The R_z DB is a SQLite cache of (theta, eps_target) → (V_blob, v_f, N_D,
+    # method) keyed by the pre-computed zeta9 + HRSA sweeps.  We:
+    #   (a) Lookup theta_red (folded into [0, pi]) at eps tolerance ``eps``.
+    #   (b) If hit, reify V (3,3,6 ringZ9 ints + v_f → complex 3x3), apply
+    #       subspace permutation P · V · P^†, return result.
+    #   (c) If miss and ``allow_live_fallback`` is True (default), dispatch
+    #       a live HRSA/zeta9 synthesis via ``u_net_builder.live_synthesize_rz``
+    #       and insert the result back into the DB (per ``rz_db/PHASE_D_TODO.md``).
+    #   (d) If still no synthesis, return a soft-failure dict so the caller
+    #       can choose to substitute the exact target rotation.
+    try:
+        db = _get_rz_db()
+    except Exception as exc:
+        return {
+            "V": None, "V_ring": None, "ring_valid": False,
+            "N_D": None, "method": "zeta9_db_open_failed",
+            "frob_error": None, "success": False,
+            "theta": theta_red, "i": i, "j": j,
+            "exception": repr(exc),
+        }
+
+    # Fold theta into [0, pi] using R_z(-theta) = R_z(theta)^†.
+    theta_abs = abs(theta_red)
+    daggered = theta_red < 0.0
+
+    # (a) Look up.  The DB lookup returns None on miss.
+    res = db.lookup(theta_abs, eps)
+    if res is None:
+        # (c) Live fallback.  Insert on success.
+        live = None
+        try:
+            from u_net_builder import live_synthesize_rz  # type: ignore
+            live = live_synthesize_rz(theta_abs, eps, method="auto", timeout=120)
+        except Exception as exc:
+            live = None
+            live_exc = repr(exc)
+        else:
+            live_exc = None
+        if live is None:
+            return {
+                "V": None, "V_ring": None, "ring_valid": False,
+                "N_D": None, "method": "zeta9_no_synthesis",
+                "frob_error": None, "success": False,
+                "theta": theta_red, "i": i, "j": j,
+                "exception": live_exc,
+            }
+        # Insert.
+        try:
+            db.insert(
+                theta=float(theta_abs),
+                eps_target=float(eps),
+                V=live["V"],
+                v_f=int(live["v_f"]),
+                achieved_frob=float(live["achieved_frob"]),
+                N_D=live["N_D"],
+                method=str(live["method"]),
+                source="live_fallback",
+            )
+            db.commit()
+        except Exception:
+            # Insert failure is non-fatal; we still have the result in hand.
+            pass
+        res = {
+            "V": live["V"],
+            "v_f": int(live["v_f"]),
+            "achieved_frob": float(live["achieved_frob"]),
+            "N_D": live["N_D"],
+            "method": str(live["method"]),
+            "source": "live_fallback",
+        }
+
+    # (b) Reify V (ringZ9 → complex) and apply subspace conjugation.
+    V_blob = res["V"]
+    v_f = int(res["v_f"])
+    V01_complex = _ringZ9_blob_to_complex(V_blob, v_f)
+    if daggered:
+        V01_complex = V01_complex.conj().T
+    V_ij = P @ V01_complex @ Pdag
+    err = float(np.linalg.norm(V_ij - target, ord="fro"))
+
+    # ringZ9 representation: V01_ring = ringmat_from_ints(V_blob, v_f);
+    # V_ij_ring = P_ring @ V01_ring @ Pdag_ring.  If daggered we'd need a
+    # ringmat dagger of V01_ring; rk.ringmat_dagger handles that exactly.
+    V_ring_ij = None
+    ring_valid = False
+    try:
+        V01_ring = rk.ringmat_from_ints(V_blob.tolist(), v_f)
+        if daggered:
+            V01_ring = rk.ringmat_dagger(V01_ring)
+        # Index the permutation Clifford in the ringZ9 net.
+        # _PERM_CACHE was set above by _build_subspace_permutations(); the
+        # 3rd / 4th entries are the 648-Clifford indices of P / P^†.
+        P_ring = rk.get_clifford_ringmat(int(ci_P), str(_E0_NET_PATH))
+        Pdag_ring = rk.get_clifford_ringmat(int(ci_Pdag), str(_E0_NET_PATH))
+        V_ring_ij = rk.ringmat_mul(P_ring, rk.ringmat_mul(V01_ring, Pdag_ring))
+        ring_valid = True
+    except Exception:
+        V_ring_ij = None
+        ring_valid = False
+
+    return {
+        "V": V_ij,
+        "V_ring": V_ring_ij,
+        "ring_valid": ring_valid,
+        "N_D": int(res["N_D"]) if res["N_D"] is not None else None,
+        "method": f"zeta9_db:{res['method']}",
+        "frob_error": err,
+        "success": err <= eps * 1.5,
+        "theta": theta_red,
+        "i": i, "j": j,
+        "rz_db_source": res.get("source"),
+    }
 
 
 # ---------------------------------------------------------------------------
