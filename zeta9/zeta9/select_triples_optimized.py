@@ -3,12 +3,21 @@ import glob
 import json
 import math
 import os
+import struct
 import time
+import zlib
 from collections import OrderedDict
 from typing import List, Tuple
 
 import numpy as np
 from mpi4py import MPI
+
+# Memory refactor #A4 (2026-05-22): bucket files are 8× zlib-L3-compressible
+# (measured on actual stage-2 output). Disk format is length-prefixed chunks
+# preceded by a 4-byte magic. Backward-compatible: files without the magic
+# are read as legacy raw int64.
+_BUCKET_MAGIC = b"Z9B1"
+_BUCKET_COMPRESS_LEVEL = 3
 
 try:
     import numba as nb  # type: ignore
@@ -154,8 +163,54 @@ def _append_rows_raw(path: str, arr: np.ndarray):
     arr = np.ascontiguousarray(arr, dtype=ROW_DTYPE)
     if arr.size == 0:
         return
+    raw = arr.tobytes()
+    compressed = zlib.compress(raw, _BUCKET_COMPRESS_LEVEL)
+    # First write to a new file gets the 4-byte magic; subsequent appends do not.
+    needs_magic = (not os.path.exists(path)) or os.path.getsize(path) == 0
     with open(path, "ab") as fh:
-        arr.tofile(fh)
+        if needs_magic:
+            fh.write(_BUCKET_MAGIC)
+        fh.write(struct.pack("<I", len(compressed)))
+        fh.write(compressed)
+
+
+def _read_bucket_bytes(path: str) -> bytes:
+    """Return raw int64-payload bytes for a bucket file.
+
+    Auto-detects new (magic + length-prefixed zlib chunks) vs legacy raw int64.
+    Returns empty bytes for missing or empty files.
+    """
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except (OSError, FileNotFoundError):
+        return b""
+    if len(data) == 0:
+        return b""
+    if data[:4] == _BUCKET_MAGIC:
+        chunks = []
+        pos = 4
+        n = len(data)
+        while pos < n:
+            if pos + 4 > n:
+                raise ValueError(f"truncated chunk length in {path} at {pos}")
+            (length,) = struct.unpack_from("<I", data, pos)
+            pos += 4
+            if length == 0 or pos + length > n:
+                raise ValueError(f"bad chunk length {length} in {path} at {pos}")
+            chunks.append(zlib.decompress(data[pos:pos+length]))
+            pos += length
+        return b"".join(chunks)
+    # Legacy raw int64 format (pre-A4).
+    return data
+
+
+def _read_bucket_rows(path: str) -> np.ndarray:
+    """Return rows from a bucket file as a (n,) int64 array (flat). Caller reshapes."""
+    payload = _read_bucket_bytes(path)
+    if not payload:
+        return np.empty((0,), dtype=ROW_DTYPE)
+    return np.frombuffer(payload, dtype=ROW_DTYPE)
 
 
 def _buffered_gather_counts(comm, local_value, root=0, tag=9100):
@@ -615,24 +670,18 @@ class BucketCache:
         if sz == 0:
             val = (BucketCache._EMPTY_ROWS, BucketCache._EMPTY_KEYS)
         else:
-            # Memory refactor #1 (2026-05-22): use np.memmap instead of
-            # np.fromfile. Same-node ranks then share these read-only pages via
-            # the Linux page cache rather than each allocating its own copy.
-            # _unique_sorted_rows() materializes a fresh sorted array (no longer
-            # tied to the mmap), so the cached entry is regular RAM.
-            try:
-                raw = np.memmap(path, dtype=ROW_DTYPE, mode='r')
-            except (ValueError, OSError):
-                # Empty or vanished file → treat as empty
-                raw = np.empty((0,), dtype=ROW_DTYPE)
+            # Memory refactor #1 + A4 (2026-05-22): _read_bucket_rows auto-detects
+            # legacy raw vs new zlib-compressed (Z9B1 magic + length-prefixed chunks).
+            # For raw legacy files the mmap-shared page cache still applies on
+            # same-node ranks; for compressed files each rank decompresses to its
+            # own buffer (8× disk savings outweighs the per-rank decompress).
+            raw = _read_bucket_rows(path)
             if raw.size == 0:
                 val = (BucketCache._EMPTY_ROWS, BucketCache._EMPTY_KEYS)
             else:
                 rows = _unique_sorted_rows(raw.reshape(-1, 3))
                 keys = _pack_rows_int64(rows)
                 val = (rows, keys)
-            # Drop the mmap reference; the materialized rows/keys arrays own
-            # their own memory now.
             del raw
         self._cache[path] = val
         while len(self._cache) > self.max_entries:
@@ -978,12 +1027,10 @@ def select_triples_mpi(
                 print(f"processing B bucket {my_bid+1}/{n_buckets} on rank 0 (completed {done_before}/{n_buckets}, cumulative_rows={manifest.get('rows_written', 0)})")
             b_path = b_bucket_paths[my_bid]
             if os.path.exists(b_path) and os.path.getsize(b_path) > 0:
-                # Memory refactor #1: mmap so simultaneous loads across ranks
-                # on the same node share via page cache instead of each allocating.
-                try:
-                    raw = np.memmap(b_path, dtype=ROW_DTYPE, mode='r')
-                except (ValueError, OSError):
-                    raw = np.empty((0,), dtype=ROW_DTYPE)
+                # A4 (2026-05-22): _read_bucket_rows handles both legacy raw and
+                # zlib-compressed formats. Decompression cost is small vs the
+                # downstream _process_b_bucket work.
+                raw = _read_bucket_rows(b_path)
                 if raw.size:
                     b_rows = _unique_sorted_rows(raw.reshape(-1, 3))
                 else:
@@ -1039,22 +1086,31 @@ def select_triples_mpi(
                 print(f"completed B buckets through {min(phase_start + size, n_buckets)}/{n_buckets}, phase_rows={sum(phase_counts)}, cumulative={manifest['rows_written']}")
         comm.Barrier()
 
-    # finalize output on root only after all parts exist
+    # finalize output on root only after all parts exist.
+    # A4 (2026-05-22): .parts files may be zlib-compressed (magic Z9B1 + len-prefixed
+    # chunks) or legacy raw. _read_bucket_bytes auto-detects and returns decoded
+    # raw payload, which we then write to output_file. output_file STAYS RAW so
+    # the stage-3 reader (find_roots_exact_v2:_read_triple_rows) doesn't need
+    # changes — preserves random-access by row.
     if rank == 0:
         if os.path.exists(output_file):
             os.remove(output_file)
         rows_written = 0
+        row_byte_size = 9 * np.dtype(ROW_DTYPE).itemsize  # 72 bytes per (9-int64) row
         for r in range(size):
             part = os.path.join(manifest["parts_dir"], f"rank_{r:04d}.bin")
             if not os.path.exists(part) or os.path.getsize(part) == 0:
                 continue
-            with open(part, "rb") as src, open(output_file, "ab") as dst:
-                while True:
-                    chunk = src.read(8 * 9 * 100000)
-                    if not chunk:
-                        break
-                    dst.write(chunk)
-            rows_written += int(os.path.getsize(part) // (9 * np.dtype(ROW_DTYPE).itemsize))
+            payload = _read_bucket_bytes(part)
+            if not payload:
+                continue
+            assert len(payload) % row_byte_size == 0, (
+                f"part {part}: decoded payload size {len(payload)} "
+                f"not a multiple of {row_byte_size}-byte row"
+            )
+            with open(output_file, "ab") as dst:
+                dst.write(payload)
+            rows_written += len(payload) // row_byte_size
         manifest["rows_written"] = rows_written
         manifest["completed"] = True
         manifest["wall_total_time"] = float(time.time() - wall_t0)
