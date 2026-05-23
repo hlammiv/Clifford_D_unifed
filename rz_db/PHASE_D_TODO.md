@@ -45,6 +45,24 @@ pre-population for that tier. <5% means lazy is winning.
 
 Memory: `sk_rz_db_lazy_population.md` (2026-05-23).
 
+## Per-leaf budget: `ε_leaf = ε_U / √n_leaves`
+
+`u_net_builder._reify_factors` splits the U-net error budget across the ~57
+Z-leaves emitted by Euler decomposition. The original Phase D design used
+`ε_leaf = ε_U` and relied on a post-product `1.5·ε_U` slack check.
+
+Empirically that fails for arbitrary Haar targets (verified 2026-05-23, see
+memory `tier0_slack_design_dead_2026-05-23`): the L2 error estimate
+`ε_total ≈ ε_leaf · √n_leaves` is ~7.5× over the slack ceiling at any ε_U.
+
+The current design uses the L2-tight split:
+
+```python
+eps_leaf = max(float(eps_u) / max(1.0, float(n_z_leaves) ** 0.5), 1e-12)
+```
+
+If you change this back, expect 0/N yield on Haar samples with a densified DB.
+
 ## Hidden prereq: `/tmp/e0_net_closed.txt`
 
 `hrsa/sk_leaves.synthesize_leaf` requires the 8100-element sign-extended

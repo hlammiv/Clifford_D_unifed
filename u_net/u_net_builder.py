@@ -453,16 +453,13 @@ def _reify_factors(factors: list,
         return {"V_total": V_total, "N_D_sum": 0, "n_leaves": 0,
                 "n_db_misses": 0, "n_live_recovered": 0, "n_unresolved": 0}
 
-    # Per-leaf eps budget.  Triangle-inequality-conservative would be
-    # eps_u / n_z_leaves, which empirically demands tighter R_z entries than
-    # the DB currently stores (DB tiers cap at 1e-3, leaf budget at eps_u=0.5
-    # n=57 → 0.0088, only the 1e-3 tier qualifies and it has 25 angles).
-    # We use the FULL eps_u per leaf and rely on the post-product slack
-    # check (`achieved_frob > 1.5*eps_u → drop`) to enforce overall coverage.
-    # Leaf errors largely cancel out in unitary products, so this is empirically
-    # tight enough; a future revision will switch to an adaptive per-leaf budget
-    # once a denser DB is available.
-    eps_leaf = max(float(eps_u), 1e-12)
+    # Per-leaf eps budget.  L2 estimate: total error ≈ eps_leaf · √n_leaves
+    # for random orientations (Phase D's eps_leaf=eps_u design assumed cancellation
+    # that doesn't materialize on arbitrary Haar — verified empirically 2026-05-23,
+    # see memory `tier0_slack_design_dead_2026-05-23`).  Solving for eps_leaf:
+    #   eps_leaf = eps_u / √n_leaves
+    # gives total ≈ eps_u, well inside the 1.5·eps_u post-product slack ceiling.
+    eps_leaf = max(float(eps_u) / max(1.0, float(n_z_leaves) ** 0.5), 1e-12)
     V_total = np.eye(3, dtype=np.complex128)
     N_D_sum = 0
     n_db_misses = 0
