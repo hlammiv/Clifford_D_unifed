@@ -25,6 +25,9 @@ from __future__ import annotations
 import argparse
 import cmath
 import math
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +39,31 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 _E0_NET_PATH = Path("/tmp/e0_net_closed.txt")
+_E0_NET_DUMP_BIN = Path(__file__).resolve().parent / "e0_net_dump"
+
+
+def _ensure_e0_net(path: Path) -> None:
+    """Build the e0_net dump file if it doesn't exist by invoking the
+    hrsa/e0_net_dump C++ binary. Idempotent; no-op if the file is present
+    and non-empty. Raises FileNotFoundError with actionable guidance if the
+    binary is also missing."""
+    if path.exists() and path.stat().st_size > 0:
+        return
+    if not _E0_NET_DUMP_BIN.exists() or not os.access(_E0_NET_DUMP_BIN, os.X_OK):
+        raise FileNotFoundError(
+            f"e0_net file {path} is missing and the builder binary "
+            f"{_E0_NET_DUMP_BIN} is also missing. Build it: "
+            f"cd {_E0_NET_DUMP_BIN.parent} && make e0_net_dump"
+        )
+    print(f"[ep_descent] {path} missing; building via {_E0_NET_DUMP_BIN}",
+          file=sys.stderr)
+    res = subprocess.run([str(_E0_NET_DUMP_BIN), str(path)],
+                         capture_output=True, text=True, timeout=300)
+    if res.returncode != 0 or not path.exists() or path.stat().st_size == 0:
+        raise RuntimeError(
+            f"e0_net_dump failed (rc={res.returncode}): "
+            f"stderr={res.stderr[:500]}"
+        )
 
 
 def load_e0_net(path: Path = _E0_NET_PATH) -> tuple[np.ndarray, np.ndarray]:
@@ -72,6 +100,7 @@ def load_e0_net_with_ring(
         V_00_a0 V_00_a1 ... V_00_a5  V_01_a0 ... V_22_a5
     """
     import cmath
+    _ensure_e0_net(Path(path))
     xi = cmath.exp(2j * cmath.pi / 9.0)
     U_list = []
     meta_list = []

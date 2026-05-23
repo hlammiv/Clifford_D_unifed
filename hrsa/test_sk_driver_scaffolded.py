@@ -39,14 +39,28 @@ from sk_driver_scaffolded import sk_driver_scaffolded            # noqa: E402
 # ---------------------------------------------------------------------------
 
 RZ_DB_PATH = "/tmp/rz_test.sqlite"
-E0_NET_PATH = "/tmp/e0_net_5184.txt"
+E0_NET_PATH = "/tmp/e0_net_closed.txt"  # actually loaded by ep_descent.load_e0_net
+E0_NET_DUMP_BIN = Path(__file__).resolve().parent / "e0_net_dump"
 
 
 def _skip_if_missing_prereqs():
     if not Path(RZ_DB_PATH).exists():
         pytest.skip(f"prereq missing: {RZ_DB_PATH} (build via rz_db/build_rz_db.py)")
+    # e0_net file: auto-build via the C++ binary if available; skip otherwise.
+    # ep_descent.load_e0_net() does the same thing transparently, but doing
+    # it here gives a single clean point of failure rather than a deep
+    # FileNotFoundError on first synthesize_leaf call.
     if not Path(E0_NET_PATH).exists():
-        pytest.skip(f"prereq missing: {E0_NET_PATH} (build via hrsa/e0_net_dump)")
+        if not E0_NET_DUMP_BIN.exists():
+            pytest.skip(
+                f"prereq missing: {E0_NET_PATH} AND builder binary "
+                f"{E0_NET_DUMP_BIN} is also absent (run: cd hrsa && make e0_net_dump)"
+            )
+        import subprocess
+        res = subprocess.run([str(E0_NET_DUMP_BIN), E0_NET_PATH],
+                             capture_output=True, text=True, timeout=300)
+        if res.returncode != 0 or not Path(E0_NET_PATH).exists():
+            pytest.fail(f"e0_net_dump failed: rc={res.returncode} stderr={res.stderr[:300]}")
 
 
 # ---------------------------------------------------------------------------
