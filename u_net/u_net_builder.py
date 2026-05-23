@@ -303,7 +303,7 @@ def _live_zeta9(theta: float, eps: float, timeout: int) -> Optional[dict]:
 
 
 def live_synthesize_rz(theta: float, eps_target: float,
-                       method: str = "auto", timeout: int = 120) -> Optional[dict]:
+                       method: str = "auto", timeout: int = 180) -> Optional[dict]:
     """Live HRSA / zeta9 dispatch for a single ``R^Z_{(0,1)}(theta)`` target.
 
     Parameters

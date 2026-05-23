@@ -44,3 +44,14 @@ pre-population for that tier. <5% means lazy is winning.
 ## Cross-reference
 
 Memory: `sk_rz_db_lazy_population.md` (2026-05-23).
+
+## Hidden prereq: `/tmp/e0_net_closed.txt`
+
+`hrsa/sk_leaves.synthesize_leaf` requires the 8100-element sign-extended
+Clifford net at `/tmp/e0_net_closed.txt`. Rule 3 loads it before rule 4
+even fires, so without it the entire lazy-fallback path raises
+`FileNotFoundError`.
+
+As of commit `285c025` (2026-05-23), `hrsa/ep_descent.load_e0_net()`
+auto-builds the file on first import by invoking `hrsa/e0_net_dump`.
+If the C++ binary is also missing: `cd hrsa && make e0_net_dump`.

@@ -90,6 +90,10 @@ class RzLookupDB:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
+        # WAL allows one writer + many concurrent readers without blocking.
+        # Required for MPI sweeps that write back via the lazy-fallback path.
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(self.SCHEMA)
         self.conn.commit()
         # Cache of theta lists per eps_target for fast nearest-theta bisect.

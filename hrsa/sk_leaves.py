@@ -392,7 +392,7 @@ def synthesize_leaf(theta: float, eps: float, i: int, j: int) -> dict:
         live = None
         try:
             from u_net_builder import live_synthesize_rz  # type: ignore
-            live = live_synthesize_rz(theta_abs, eps, method="auto", timeout=120)
+            live = live_synthesize_rz(theta_abs, eps, method="auto", timeout=180)
         except Exception as exc:
             live = None
             live_exc = repr(exc)
