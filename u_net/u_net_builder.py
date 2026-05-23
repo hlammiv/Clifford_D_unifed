@@ -184,7 +184,10 @@ def _live_hrsa(theta: float, eps: float, timeout: int) -> Optional[dict]:
             f"{eps:g}",
             "8",  # max_f
             "--json", str(json_path),
-            "--max-solns", "1",
+            # max-solns 20: invoke HRSA_bestD (best-of-K within first successful
+            # f-level by min D-count). Default 1 gives loose first-hit semantics
+            # — see memory hrsa_first_hit_bias.md.
+            "--max-solns", "20",
             "--no-lookahead",
         ]
         try:
