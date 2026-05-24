@@ -133,6 +133,13 @@ def main():
         ax1.scatter(eps_t, nd, c=[method_color[m]], s=25, alpha=0.6, label=f"{m} (n={len(ps)})", edgecolors="none")
         ax2.scatter(frob, nd, c=[method_color[m]], s=25, alpha=0.6, label=f"{m} (n={len(ps)})", edgecolors="none")
 
+    # Joint x-range across both panels so a cell at (ε_target, achieved_frob)
+    # lines up vertically when its target ε and achieved frob are equal.
+    all_eps = np.array([p["eps_target"] for p in pts if p["eps_target"] > 0])
+    all_frob = np.array([p["achieved_frob"] for p in pts if p["achieved_frob"] > 0])
+    xmin = min(all_eps.min(), all_frob.min()) * 0.7
+    xmax = max(all_eps.max(), all_frob.max()) * 1.4
+
     for ax, xlabel, title in [
         (ax1, r"$\varepsilon$ (target Frobenius)", "N_D vs target ε"),
         (ax2, r"achieved Frobenius distance", "N_D vs achieved frob"),
@@ -141,7 +148,7 @@ def main():
         ax.set_xlabel(xlabel)
         ax.set_ylabel(r"$N_D$ (D-gate count)")
         ax.set_title(title)
-        ax.invert_xaxis()
+        ax.set_xlim(xmax, xmin)  # inverted (descending)
         ax.grid(True, alpha=0.3, which="both")
         ax.legend(fontsize=8, loc="upper left", framealpha=0.92)
 
