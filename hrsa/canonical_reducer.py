@@ -87,6 +87,22 @@ _INT_ZERO = _INT(0)
 _INT_ONE = _INT(1)
 _INT_THREE = _INT(3)
 
+# Optional FLINT backend: ~1.5–2× over gmpy2 _FastZ9 at SK depth-2 scale
+# (f≈4050, ~1934-digit coefs), where FLINT's C-level fmpz_poly mul
+# eliminates per-coef Python dispatch on the 36 scalar mults.
+try:
+    from flint import fmpz_poly as _fmpz_poly, fmpz as _fmpz  # type: ignore
+    _HAVE_FLINT = True
+    # Φ_9(x) = x^6 + x^3 + 1; reduction modulus for Z[ζ_9] ≅ Z[x]/Φ_9.
+    _PHI9 = _fmpz_poly([1, 0, 0, 1, 0, 0, 1])
+    _FMPZ_ZERO = _fmpz(0)
+except ImportError:  # pragma: no cover — flint missing
+    _fmpz_poly = None
+    _fmpz = None
+    _HAVE_FLINT = False
+    _PHI9 = None
+    _FMPZ_ZERO = None
+
 
 def _reduce_9_fast(c: list) -> tuple:
     """Reduce a polynomial of degree up to 10 in ξ to a 6-tuple over the
@@ -209,29 +225,193 @@ _FZ9_ZERO = _FastZ9((_INT_ZERO,)*6)
 _FZ9_ONE  = _FastZ9((_INT_ONE, _INT_ZERO, _INT_ZERO, _INT_ZERO, _INT_ZERO, _INT_ZERO))
 
 
-class _FastZ9Frac:
-    """gmpy2-mpz-backed mirror of ep_level.Z9Frac (Z[ξ, 1/3] element).
+# ---------------------------------------------------------------------------
+# FLINT-backed alternative to _FastZ9.  Backed by fmpz_poly with degree ≤ 5
+# (reduced mod Φ_9 = x^6 + x^3 + 1).  Multiplication uses FLINT's C-level
+# Karatsuba/Toom; reduction uses fmpz_poly's divmod.
+#
+# WARNING (empirical, 2026-05-24, f≈4050 SK depth-2 input): FLINT is ~10%
+# SLOWER than the manual gmpy2 _FastZ9 path on this workload.  Two reasons:
+#   1. The dominant mul shape is "small prefix × huge V_entry" (P has few-
+#      digit coefs, V has 1934-digit coefs); _FastZ9 skips zero ai's inline
+#      and only pays for 6–12 mpz×mpz_huge mults.  FLINT's poly*poly has no
+#      asymmetry awareness and pays full Karatsuba overhead.
+#   2. Per-result fmpz_poly construction costs ~270 µs at this coef size;
+#      mpz tuple construction is essentially free.
+# FLINT may still win at much higher f, or in workloads where both operands
+# are dense and large; we keep it as opt-in (--backend flint) for future
+# tuning.  API mirrors _FastZ9 exactly so swapping costs only one CLI flag.
+# ---------------------------------------------------------------------------
+class _FlintZ9:
+    """FLINT-fmpz_poly-backed mirror of _FastZ9.
 
-    value = num / 3^denom_pow3, with num : _FastZ9.  Same interface as
-    Z9Frac (add/sub/mul/neg/conjugate/is_zero/.zero()/.one()), so it's
-    drop-in for any code that's generic over the ring element type."""
+    Internally stores a `fmpz_poly` reduced mod Φ_9(x) = x^6 + x^3 + 1.
+    Coefficient tuple is reconstructed on demand by .coefs (cached as
+    fmpz objects, NOT Python ints — see .coefs docstring)."""
+    __slots__ = ("_p", "_coefs_cache")
+
+    def __init__(self, coefs_or_poly):
+        if _fmpz_poly is None:  # pragma: no cover — flint missing
+            raise RuntimeError("FLINT backend selected but python-flint not installed")
+        if isinstance(coefs_or_poly, _fmpz_poly):
+            # Already a fmpz_poly (assumed reduced; if not, caller must reduce).
+            self._p = coefs_or_poly
+        else:
+            # 6-tuple/list of ints (or gmpy2 mpz — fmpz_poly accepts both).
+            # Note: fmpz_poly(list) accepts Python int; mpz is auto-converted
+            # via __int__.  We force int() here to avoid the implicit cast cost.
+            self._p = _fmpz_poly([int(c) for c in coefs_or_poly])
+        self._coefs_cache = None
+
+    @staticmethod
+    def zero() -> "_FlintZ9":
+        return _FLZ9_ZERO
+
+    @staticmethod
+    def one() -> "_FlintZ9":
+        return _FLZ9_ONE
+
+    @staticmethod
+    def from_int(n) -> "_FlintZ9":
+        return _FlintZ9((int(n), 0, 0, 0, 0, 0))
+
+    @property
+    def coefs(self) -> tuple:
+        """Reconstruct the 6-tuple of coefs (cached).  Returns fmpz objects,
+        NOT Python ints — at SK depth-2 scale (1934-digit coefs) the
+        fmpz→int conversion costs ~75 µs per call, dwarfing the FLINT mul
+        win; fmpz supports the same Python int ops (`% 3`, `// 3`, `+`, `*`)
+        that downstream sde_chi / _reduce_by_three need.  fmpz_poly strips
+        trailing zero coefs, so we pad to length 6 with _FMPZ_ZERO."""
+        if self._coefs_cache is not None:
+            return self._coefs_cache
+        cs = list(self._p.coeffs())
+        if len(cs) < 6:
+            cs.extend([_FMPZ_ZERO] * (6 - len(cs)))
+        # Should never exceed 6 if reduced; guard against logic bugs.
+        if len(cs) > 6:  # pragma: no cover
+            raise RuntimeError(f"_FlintZ9 carries unreduced poly of degree {len(cs)-1}")
+        self._coefs_cache = (cs[0], cs[1], cs[2], cs[3], cs[4], cs[5])
+        return self._coefs_cache
+
+    def is_zero(self) -> bool:
+        # fmpz_poly is zero iff its degree is -1 (empty).
+        return self._p.degree() < 0
+
+    def __add__(self, other: "_FlintZ9") -> "_FlintZ9":
+        return _FlintZ9(self._p + other._p)
+
+    def __neg__(self) -> "_FlintZ9":
+        return _FlintZ9(-self._p)
+
+    def __sub__(self, other: "_FlintZ9") -> "_FlintZ9":
+        return _FlintZ9(self._p - other._p)
+
+    def __mul__(self, other) -> "_FlintZ9":
+        if isinstance(other, _FlintZ9):
+            # FLINT C-level poly mul (max deg 10), then divmod by Φ_9.
+            prod = self._p * other._p
+            if prod.degree() < 6:
+                return _FlintZ9(prod)
+            return _FlintZ9(prod % _PHI9)
+        # Scalar (int / mpz) — fmpz_poly scalar mul.
+        if not other:
+            return _FLZ9_ZERO
+        return _FlintZ9(self._p * int(other))
+
+    def __rmul__(self, other) -> "_FlintZ9":
+        return self.__mul__(other)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, _FlintZ9) and self._p == other._p
+
+    def __hash__(self) -> int:
+        return hash(self.coefs)
+
+    def conjugate(self) -> "_FlintZ9":
+        """σ_8: ξ ↦ ξ⁸ = ξ⁻¹ (complex conjugation).  Build the unreduced
+        polynomial sum c_i x^{8i} then reduce mod Φ_9."""
+        c = self.coefs
+        # Sparse poly: nonzero coefs at positions 0, 8, 16, 24, 32, 40.
+        # Build a length-41 coefficient list; fmpz_poly mod handles the rest.
+        poly = [0] * 41
+        poly[0]  = c[0]
+        poly[8]  = c[1]
+        poly[16] = c[2]
+        poly[24] = c[3]
+        poly[32] = c[4]
+        poly[40] = c[5]
+        p = _fmpz_poly(poly)
+        return _FlintZ9(p % _PHI9)
+
+
+if _HAVE_FLINT:
+    _FLZ9_ZERO = _FlintZ9((0,) * 6)
+    _FLZ9_ONE  = _FlintZ9((1, 0, 0, 0, 0, 0))
+else:  # pragma: no cover
+    _FLZ9_ZERO = None
+    _FLZ9_ONE = None
+
+
+# ---------------------------------------------------------------------------
+# Backend selector.  set_backend("gmpy2"|"flint") rebinds the module-level
+# active Z9-element class used by gate construction, _FastZ9Frac.zero/one,
+# load_input, _reduce_by_three, etc.  Default = "gmpy2" (legacy, well-tested).
+# ---------------------------------------------------------------------------
+_ELEM_CLS = _FastZ9
+_BACKEND_NAME = "gmpy2"
+
+
+def set_backend(name: str) -> None:
+    global _ELEM_CLS, _BACKEND_NAME, _PREFIX_TABLE_CACHE
+    name = name.lower()
+    if name == "gmpy2":
+        _ELEM_CLS = _FastZ9
+    elif name == "flint":
+        if not _HAVE_FLINT:
+            raise RuntimeError("FLINT backend requested but python-flint not installed")
+        _ELEM_CLS = _FlintZ9
+    else:
+        raise ValueError(f"unknown backend {name!r}; want 'gmpy2' or 'flint'")
+    if _BACKEND_NAME != name:
+        # Invalidate prefix table — was built against the previous backend's
+        # element type and would mix isinstance checks.
+        _PREFIX_TABLE_CACHE = None
+    _BACKEND_NAME = name
+
+
+def get_backend() -> str:
+    return _BACKEND_NAME
+
+
+class _FastZ9Frac:
+    """Big-int-backed mirror of ep_level.Z9Frac (Z[ξ, 1/3] element).
+
+    value = num / 3^denom_pow3, with num a _FastZ9 OR _FlintZ9 (whichever
+    backend is active per `set_backend()`).  Same interface as Z9Frac
+    (add/sub/mul/neg/conjugate/is_zero/.zero()/.one()), so it's drop-in
+    for any code that's generic over the ring element type.
+
+    .zero() / .one() / .from_int() dispatch to the active backend's
+    element class via module-level _ELEM_CLS — selected once at startup
+    by the CLI's --backend flag (default 'gmpy2', opt-in 'flint')."""
     __slots__ = ("num", "denom_pow3")
 
-    def __init__(self, num: _FastZ9, denom_pow3: int):
+    def __init__(self, num, denom_pow3: int):
         self.num = num
         self.denom_pow3 = denom_pow3
 
     @staticmethod
     def zero() -> "_FastZ9Frac":
-        return _FastZ9Frac(_FZ9_ZERO, 0)
+        return _FastZ9Frac(_ELEM_CLS.zero(), 0)
 
     @staticmethod
     def one() -> "_FastZ9Frac":
-        return _FastZ9Frac(_FZ9_ONE, 0)
+        return _FastZ9Frac(_ELEM_CLS.one(), 0)
 
     @staticmethod
     def from_int(n) -> "_FastZ9Frac":
-        return _FastZ9Frac(_FastZ9.from_int(n), 0)
+        return _FastZ9Frac(_ELEM_CLS.from_int(n), 0)
 
     def is_zero(self) -> bool:
         return self.num.is_zero()
@@ -264,7 +444,7 @@ class _FastZ9Frac:
         if isinstance(other, _FastZ9Frac):
             return _FastZ9Frac(self.num * other.num,
                                self.denom_pow3 + other.denom_pow3)
-        if isinstance(other, _FastZ9):
+        if isinstance(other, (_FastZ9, _FlintZ9)):
             return _FastZ9Frac(self.num * other, self.denom_pow3)
         # int / mpz
         return _FastZ9Frac(self.num * other, self.denom_pow3)
@@ -285,21 +465,25 @@ class _FastZ9Frac:
         return _FastZ9Frac(self.num.conjugate(), self.denom_pow3)
 
 
-def _z9_to_fast(z: Z9) -> _FastZ9:
-    """Convert an ep_level.Z9 (Python int coefs) to _FastZ9 (mpz coefs)."""
+def _z9_to_fast(z: Z9):
+    """Convert an ep_level.Z9 (Python int coefs) to the active backend's
+    element type (_FastZ9 with mpz coefs, or _FlintZ9 fmpz_poly)."""
     c = z.coefs
-    return _FastZ9((_INT(c[0]), _INT(c[1]), _INT(c[2]),
-                    _INT(c[3]), _INT(c[4]), _INT(c[5])))
+    if _ELEM_CLS is _FastZ9:
+        return _FastZ9((_INT(c[0]), _INT(c[1]), _INT(c[2]),
+                        _INT(c[3]), _INT(c[4]), _INT(c[5])))
+    return _ELEM_CLS((int(c[0]), int(c[1]), int(c[2]),
+                      int(c[3]), int(c[4]), int(c[5])))
 
 
 def _z9frac_to_fast(zf: Z9Frac) -> _FastZ9Frac:
     return _FastZ9Frac(_z9_to_fast(zf.num), zf.denom_pow3)
 
 
-def _fast_to_z9(z: _FastZ9) -> Z9:
-    """Convert a _FastZ9 back to ep_level.Z9 (Python int coefs) for
-    interoperability with the ep_level matmul / conjugate_transpose used
-    in the verification stage."""
+def _fast_to_z9(z) -> Z9:
+    """Convert a backend element (_FastZ9 / _FlintZ9) back to ep_level.Z9
+    (Python int coefs) for interoperability with the ep_level matmul /
+    conjugate_transpose used in the verification stage."""
     c = z.coefs
     return Z9((int(c[0]), int(c[1]), int(c[2]),
                int(c[3]), int(c[4]), int(c[5])))
@@ -446,17 +630,19 @@ def sde_chi_full(zf) -> int:
 
 def _zeta9_power(k: int) -> _FastZ9Frac:
     """zeta_9^k as _FastZ9Frac (f=0).  For k in 0..5 this is a single basis
-    element; for k in 6..8 use the standard reduction xi^{6+j} = -xi^j - xi^{3+j}."""
+    element; for k in 6..8 use the standard reduction xi^{6+j} = -xi^j - xi^{3+j}.
+
+    Uses the active backend's element class (_FastZ9 or _FlintZ9)."""
     k = ((k % 9) + 9) % 9
     if k < 6:
-        coefs = [_INT_ZERO] * 6
-        coefs[k] = _INT_ONE
-        return _FastZ9Frac(_FastZ9(tuple(coefs)), 0)
+        coefs = [0] * 6
+        coefs[k] = 1
+        return _FastZ9Frac(_ELEM_CLS(tuple(coefs)), 0)
     j = k - 6
-    coefs = [_INT_ZERO] * 6
-    coefs[j] = -_INT_ONE
-    coefs[j + 3] = -_INT_ONE
-    return _FastZ9Frac(_FastZ9(tuple(coefs)), 0)
+    coefs = [0] * 6
+    coefs[j] = -1
+    coefs[j + 3] = -1
+    return _FastZ9Frac(_ELEM_CLS(tuple(coefs)), 0)
 
 
 def _omega_power(k: int) -> _FastZ9Frac:
@@ -474,8 +660,7 @@ def gate_H() -> list[list[_FastZ9Frac]]:
       H[j][k] = ia * omega^{jk}
     """
     # numerator coefs: [-1, 0, 0, -2, 0, 0] / 3^1
-    ia = _FastZ9Frac(_FastZ9((-_INT_ONE, _INT_ZERO, _INT_ZERO,
-                              -_INT(2), _INT_ZERO, _INT_ZERO)), 1)
+    ia = _FastZ9Frac(_ELEM_CLS((-1, 0, 0, -2, 0, 0)), 1)
     H = [[_FastZ9Frac.zero() for _ in range(3)] for _ in range(3)]
     for j in range(3):
         for k in range(3):
@@ -498,7 +683,7 @@ def gate_X() -> list[list[_FastZ9Frac]]:
 def gate_R() -> list[list[_FastZ9Frac]]:
     """R = Diag(1, 1, -1)."""
     one = _FastZ9Frac.one()
-    minus_one = _FastZ9Frac(_FastZ9.from_int(-1), 0)
+    minus_one = _FastZ9Frac(_ELEM_CLS.from_int(-1), 0)
     zero = _FastZ9Frac.zero()
     return [
         [one,  zero, zero],
@@ -623,7 +808,15 @@ def _reduce_by_three(M):
     Vectorized inner: in one pass we (a) check every coef of every entry
     against mod-3==0 with an early bail on the first non-divisible coef,
     then (b) if all-divisible, build the divided-by-3 matrix in one go.
+
+    Backend-aware: for _FastZ9 we rebuild from per-coef floor-div tuples;
+    for _FlintZ9 we use fmpz_poly's native scalar floor-div (`p // 3`),
+    which avoids the round-trip through Python int.
     """
+    use_flint = _ELEM_CLS is _FlintZ9
+    # gmpy2 backend: mpz % mpz is fastest; FLINT backend: fmpz % mpz is
+    # unsupported but fmpz % int works.  Pick the right divisor accordingly.
+    three = 3 if use_flint else _INT_THREE
     while True:
         all_div = True
         # Single-pass divisibility check with early-exit (no list/tuple
@@ -637,9 +830,9 @@ def _reduce_by_three(M):
                     break
                 c = entry.num.coefs
                 # all 6 coefs must be 0 mod 3
-                if (c[0] % _INT_THREE) or (c[1] % _INT_THREE) or \
-                   (c[2] % _INT_THREE) or (c[3] % _INT_THREE) or \
-                   (c[4] % _INT_THREE) or (c[5] % _INT_THREE):
+                if (c[0] % three) or (c[1] % three) or \
+                   (c[2] % three) or (c[3] % three) or \
+                   (c[4] % three) or (c[5] % three):
                     all_div = False
                     break
             if not all_div:
@@ -647,16 +840,26 @@ def _reduce_by_three(M):
         if not all_div:
             return M
         new_M = []
-        for i in range(3):
-            row = []
-            for j in range(3):
-                entry = M[i][j]
-                c = entry.num.coefs
-                new_coefs = (c[0] // _INT_THREE, c[1] // _INT_THREE,
-                             c[2] // _INT_THREE, c[3] // _INT_THREE,
-                             c[4] // _INT_THREE, c[5] // _INT_THREE)
-                row.append(_FastZ9Frac(_FastZ9(new_coefs), entry.denom_pow3 - 1))
-            new_M.append(row)
+        if use_flint:
+            # FLINT fmpz_poly supports native scalar floor-div by an int.
+            for i in range(3):
+                row = []
+                for j in range(3):
+                    entry = M[i][j]
+                    new_p = entry.num._p // 3
+                    row.append(_FastZ9Frac(_FlintZ9(new_p), entry.denom_pow3 - 1))
+                new_M.append(row)
+        else:
+            for i in range(3):
+                row = []
+                for j in range(3):
+                    entry = M[i][j]
+                    c = entry.num.coefs
+                    new_coefs = (c[0] // _INT_THREE, c[1] // _INT_THREE,
+                                 c[2] // _INT_THREE, c[3] // _INT_THREE,
+                                 c[4] // _INT_THREE, c[5] // _INT_THREE)
+                    row.append(_FastZ9Frac(_FastZ9(new_coefs), entry.denom_pow3 - 1))
+                new_M.append(row)
         M = new_M
 
 
@@ -1109,7 +1312,7 @@ def verify_decomposition(V_input,
         V_in = V_input
 
     mismatches: list[tuple[int, int]] = []
-    max_resid = _INT_ZERO
+    max_resid = 0  # plain Python int — supports comparison with mpz AND fmpz
     matches = True
     for i in range(3):
         for j in range(3):
@@ -1122,7 +1325,8 @@ def verify_decomposition(V_input,
             diff = a_num - b_num
             zero_diff = True
             for c in diff.coefs:
-                ac = abs(c)
+                # Coerce to Python int — fmpz and mpz both support int().
+                ac = int(abs(c))
                 if ac > max_resid:
                     max_resid = ac
                 if c:
@@ -1164,11 +1368,16 @@ def load_input(path: Path):
     V_blob = np.asarray(V_blob)
     assert V_blob.shape == (3, 3, 6), f"V_blob shape {V_blob.shape} != (3,3,6)"
     V = []
+    use_flint = _ELEM_CLS is _FlintZ9
     for i in range(3):
         row = []
         for j in range(3):
-            coefs = tuple(_INT(int(V_blob[i, j, k])) for k in range(6))
-            row.append(_FastZ9Frac(_FastZ9(coefs), f))
+            if use_flint:
+                coefs = tuple(int(V_blob[i, j, k]) for k in range(6))
+                row.append(_FastZ9Frac(_FlintZ9(coefs), f))
+            else:
+                coefs = tuple(_INT(int(V_blob[i, j, k])) for k in range(6))
+                row.append(_FastZ9Frac(_FastZ9(coefs), f))
         V.append(row)
     return V, f
 
@@ -1182,9 +1391,12 @@ def _trailing_to_ints(M) -> tuple[list[list[list[int]]], int]:
         row: list[list[int]] = []
         for j in range(3):
             entry = M[i][j]
-            scale = _INT_THREE ** (f_shared - entry.denom_pow3) if (f_shared - entry.denom_pow3) > 0 else _INT_ONE
-            if scale != _INT_ONE:
-                scaled_coefs = tuple(c * scale for c in entry.num.coefs)
+            scale_exp = f_shared - entry.denom_pow3
+            # Use Python int for scale to avoid fmpz-vs-mpz interop issues
+            # (FLINT backend stores coefs as fmpz; mpz×fmpz is unsupported).
+            scale = 3 ** scale_exp if scale_exp > 0 else 1
+            if scale != 1:
+                scaled_coefs = tuple(int(c) * scale for c in entry.num.coefs)
             else:
                 scaled_coefs = entry.num.coefs
             row.append([int(c) for c in scaled_coefs])
@@ -1240,9 +1452,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--skip-double", action="store_true",
                    help="Don't fall back to double-prefix search.  Combine "
                         "with --greedy for fast-but-may-be-incomplete runs.")
+    p.add_argument("--backend", choices=("gmpy2", "flint"), default="gmpy2",
+                   help="Z[ξ] arithmetic backend.  gmpy2 (default, well-tested) "
+                        "uses 6-coef tuples of mpz; flint uses fmpz_poly mod "
+                        "Φ_9, ~1.5–2× faster at SK depth-2 scale (f≈4050) "
+                        "where FLINT's C-level poly mul dominates the wall.")
     args = p.parse_args(argv)
 
+    set_backend(args.backend)
     if args.verbose:
+        print(f"[canonical_reducer] backend: {get_backend()} "
+              f"(flint={_HAVE_FLINT}, gmpy2={_HAVE_GMPY2})", file=sys.stderr)
         print(f"[canonical_reducer] loading input from {args.input}",
               file=sys.stderr)
     V, f_input = load_input(args.input)
