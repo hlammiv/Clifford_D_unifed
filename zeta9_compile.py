@@ -390,6 +390,14 @@ def ensure_precompute(workdir, f, eps_pre, mpi, sage_env, dry_run=False,
             "--bucket_cache_entries", "64",      # default 16; we have RAM headroom
             "--n_join_buckets", "8192",          # default; was 32768
             "--resume"]
+        # 2026-05-24: drop-column-c lossless prune. Writes 6 int64 per row
+        # instead of 9, reconstructing Y_c on read. 1.5× final TM file
+        # reduction, no behavioural change downstream (readers auto-detect
+        # the Z9TC header). On by default; set env ZETA9_NO_DROP_COL_C=1 to
+        # keep the legacy 9-int64 format (e.g. when sharing the TM file with
+        # non-v2 fitters).
+        if os.environ.get("ZETA9_NO_DROP_COL_C", "") not in ("1", "true", "yes"):
+            cmd.append("--drop_col_c")
         times["stage2"] = run_cmd(cmd, env, workdir, "stage2 (select_triples)", dry_run)
 
     # Stage 3: find_roots_exact_v2

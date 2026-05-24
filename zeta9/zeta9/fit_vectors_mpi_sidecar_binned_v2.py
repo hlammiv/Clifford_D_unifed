@@ -68,6 +68,16 @@ def coeffs_to_complex_noscale(x_coeffs):
 def _read_triple_rows(path: str, start_row: int, nrows: int) -> np.ndarray:
     if nrows <= 0:
         return np.empty((0, 9), dtype=np.int64)
+    # Auto-detect compact format (Z9TC header) written by select_triples_optimized
+    # with --drop_col_c. The reader reconstructs Y_c from the stored Y_a, Y_b
+    # and the target_sum embedded in the file header. See
+    # select_triples_optimized.read_tm_rows_compact for the canonical impl.
+    try:
+        from .select_triples_optimized import read_tm_compact_header, read_tm_rows_compact
+    except ImportError:
+        from select_triples_optimized import read_tm_compact_header, read_tm_rows_compact  # type: ignore
+    if read_tm_compact_header(path) is not None:
+        return read_tm_rows_compact(path, start_row, nrows)
     itemsize = np.dtype(np.int64).itemsize
     offset = start_row * 9 * itemsize
     with open(path, "rb") as fh:

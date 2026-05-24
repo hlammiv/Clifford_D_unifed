@@ -447,7 +447,24 @@ def search_householder_streamed(
         tmeta = _read_manifest(triples_json)
         nrows = int(tmeta["rows_written"])
         file_size = os.path.getsize(triples_file)
-        expected = nrows * 9 * np.dtype(np.int64).itemsize
+        # Compact-format files (Z9TC header) carry a 32-byte header + 6 int64
+        # per row; legacy files are 9 int64 per row with no header.
+        try:
+            from .select_triples_optimized import (
+                read_tm_compact_header as _read_tmh,
+                _TM_COMPACT_HEADER_SIZE as _Z9TC_HDR,
+                _TM_COMPACT_ROW_BYTES as _Z9TC_ROW,
+            )
+        except ImportError:
+            from select_triples_optimized import (  # type: ignore
+                read_tm_compact_header as _read_tmh,
+                _TM_COMPACT_HEADER_SIZE as _Z9TC_HDR,
+                _TM_COMPACT_ROW_BYTES as _Z9TC_ROW,
+            )
+        if _read_tmh(triples_file) is not None:
+            expected = _Z9TC_HDR + nrows * _Z9TC_ROW
+        else:
+            expected = nrows * 9 * np.dtype(np.int64).itemsize
         if file_size != expected:
             raise RuntimeError(f"Triple file size mismatch: expected {expected}, got {file_size}")
         paths = _state_paths(rootdb_prefix, n_phase_bins)
@@ -814,7 +831,24 @@ def search_householder_streamed_batched(
         tmeta = _read_manifest(triples_json)
         nrows = int(tmeta["rows_written"])
         file_size = os.path.getsize(triples_file)
-        expected = nrows * 9 * np.dtype(np.int64).itemsize
+        # Compact-format files (Z9TC header) carry a 32-byte header + 6 int64
+        # per row; legacy files are 9 int64 per row with no header.
+        try:
+            from .select_triples_optimized import (
+                read_tm_compact_header as _read_tmh,
+                _TM_COMPACT_HEADER_SIZE as _Z9TC_HDR,
+                _TM_COMPACT_ROW_BYTES as _Z9TC_ROW,
+            )
+        except ImportError:
+            from select_triples_optimized import (  # type: ignore
+                read_tm_compact_header as _read_tmh,
+                _TM_COMPACT_HEADER_SIZE as _Z9TC_HDR,
+                _TM_COMPACT_ROW_BYTES as _Z9TC_ROW,
+            )
+        if _read_tmh(triples_file) is not None:
+            expected = _Z9TC_HDR + nrows * _Z9TC_ROW
+        else:
+            expected = nrows * 9 * np.dtype(np.int64).itemsize
         if file_size != expected:
             raise RuntimeError(f"Triple file size mismatch: expected {expected}, got {file_size}")
         paths = _state_paths(rootdb_prefix, n_phase_bins)

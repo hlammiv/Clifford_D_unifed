@@ -19,6 +19,35 @@ from mpi4py import MPI
 _BUCKET_MAGIC = b"Z9B1"
 _BUCKET_COMPRESS_LEVEL = 3
 
+# ============================================================
+# Compact "drop column C" final-output format (lossless prune, 2026-05-24)
+# ============================================================
+# The final TM file conventionally stores 9 int64 per triple: (Y_a, Y_b, Y_c)
+# in the original-coordinate order. But the third triple component is fully
+# determined by Y_a + Y_b + Y_c = target_sum, so Y_c can be reconstructed on
+# read from (Y_a, Y_b) and the constant target_sum. Writing only 6 int64 per
+# triple shaves 1/3 off the on-disk size (72 B → 48 B per row, plus a small
+# fixed header).
+#
+# Format (when --drop_col_c is enabled):
+#   bytes 0..3   : magic b"Z9TC"
+#   bytes 4..7   : little-endian uint32 version (= 1)
+#   bytes 8..15  : little-endian int64 target_sum[0]   (== norm * 3^{2f})
+#   bytes 16..23 : little-endian int64 target_sum[1]   (== 0 normally)
+#   bytes 24..31 : little-endian int64 target_sum[2]   (== 0 normally)
+#   bytes 32..   : nrows * 6 int64 (Y_a[0..2], Y_b[0..2]) in native byte order
+#
+# The 32-byte header makes row-level random access trivial:
+#   offset(row i) = 32 + i * 6 * 8 = 32 + i * 48
+# and avoids any guessing about the row count via file size.
+#
+# Legacy format (no header) remains the default for back-compat. Readers
+# detect the magic in the first 4 bytes; if absent, fall back to legacy.
+_TM_COMPACT_MAGIC = b"Z9TC"
+_TM_COMPACT_VERSION = 1
+_TM_COMPACT_HEADER_SIZE = 32
+_TM_COMPACT_ROW_BYTES = 6 * 8  # 6 int64 per row in the compact format
+
 try:
     import numba as nb  # type: ignore
     _HAVE_NUMBA = True
@@ -211,6 +240,72 @@ def _read_bucket_rows(path: str) -> np.ndarray:
     if not payload:
         return np.empty((0,), dtype=ROW_DTYPE)
     return np.frombuffer(payload, dtype=ROW_DTYPE)
+
+
+def _write_tm_compact_header(fh, target_sum: np.ndarray):
+    """Write the 32-byte compact-format header to an open file handle."""
+    fh.write(_TM_COMPACT_MAGIC)
+    fh.write(struct.pack("<I", _TM_COMPACT_VERSION))
+    ts = np.asarray(target_sum, dtype=ROW_DTYPE).reshape(-1)
+    if ts.shape[0] != 3:
+        raise ValueError(f"target_sum must have 3 elements, got {ts.shape[0]}")
+    fh.write(ts.tobytes())
+
+
+def read_tm_compact_header(path: str):
+    """Return (version, target_sum np.int64[3]) if `path` is a compact TM file,
+    else None. Cheap: only reads 32 bytes."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(_TM_COMPACT_HEADER_SIZE)
+    except (OSError, FileNotFoundError):
+        return None
+    if len(head) < _TM_COMPACT_HEADER_SIZE or head[:4] != _TM_COMPACT_MAGIC:
+        return None
+    (version,) = struct.unpack_from("<I", head, 4)
+    ts = np.frombuffer(head[8:32], dtype=ROW_DTYPE).copy()
+    return int(version), ts
+
+
+def read_tm_rows_compact(path: str, start_row: int, nrows: int) -> np.ndarray:
+    """Read `nrows` triples from a compact-format TM file starting at `start_row`.
+
+    Returns a (nrows, 9) int64 array, expanding the dropped Y_c column on the
+    fly. Caller is responsible for passing valid (start, count) within the file.
+    Mirrors the API of the legacy raw reader so it can be drop-in.
+    """
+    if nrows <= 0:
+        return np.empty((0, 9), dtype=ROW_DTYPE)
+    info = read_tm_compact_header(path)
+    if info is None:
+        raise ValueError(f"{path} is not a compact-format TM file")
+    _, target_sum = info
+    offset = _TM_COMPACT_HEADER_SIZE + int(start_row) * _TM_COMPACT_ROW_BYTES
+    with open(path, "rb") as fh:
+        fh.seek(offset, os.SEEK_SET)
+        raw = np.fromfile(fh, dtype=ROW_DTYPE, count=int(nrows) * 6)
+    got = raw.shape[0] // 6
+    if got <= 0:
+        return np.empty((0, 9), dtype=ROW_DTYPE)
+    ab = raw.reshape(got, 6)
+    out = np.empty((got, 9), dtype=ROW_DTYPE)
+    out[:, 0:6] = ab
+    out[:, 6:9] = target_sum[None, :] - ab[:, 0:3] - ab[:, 3:6]
+    return out
+
+
+def tm_compact_row_count(path: str) -> int:
+    """Return the number of rows in a compact-format TM file (from file size)."""
+    info = read_tm_compact_header(path)
+    if info is None:
+        raise ValueError(f"{path} is not a compact-format TM file")
+    sz = os.path.getsize(path)
+    body = sz - _TM_COMPACT_HEADER_SIZE
+    if body < 0 or body % _TM_COMPACT_ROW_BYTES != 0:
+        raise ValueError(
+            f"compact TM file {path}: body size {body} not a multiple of {_TM_COMPACT_ROW_BYTES}"
+        )
+    return body // _TM_COMPACT_ROW_BYTES
 
 
 def _buffered_gather_counts(comm, local_value, root=0, tag=9100):
@@ -872,6 +967,7 @@ def select_triples_mpi(
     rank_flush_rows: int = 200000,
     resume: bool = False,
     verbose: bool = True,
+    drop_col_c: bool = False,
 ):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -1092,25 +1188,70 @@ def select_triples_mpi(
     # raw payload, which we then write to output_file. output_file STAYS RAW so
     # the stage-3 reader (find_roots_exact_v2:_read_triple_rows) doesn't need
     # changes — preserves random-access by row.
+    #
+    # Drop-col-C (2026-05-24): if drop_col_c, output_file is written in the
+    # compact format (Z9TC header + 6-int64 rows). Y_c is dropped on write and
+    # reconstructed on read by downstream readers. Saves 1/3 on the final TM file.
     if rank == 0:
         if os.path.exists(output_file):
             os.remove(output_file)
         rows_written = 0
-        row_byte_size = 9 * np.dtype(ROW_DTYPE).itemsize  # 72 bytes per (9-int64) row
-        for r in range(size):
-            part = os.path.join(manifest["parts_dir"], f"rank_{r:04d}.bin")
-            if not os.path.exists(part) or os.path.getsize(part) == 0:
-                continue
-            payload = _read_bucket_bytes(part)
-            if not payload:
-                continue
-            assert len(payload) % row_byte_size == 0, (
-                f"part {part}: decoded payload size {len(payload)} "
-                f"not a multiple of {row_byte_size}-byte row"
-            )
-            with open(output_file, "ab") as dst:
-                dst.write(payload)
-            rows_written += len(payload) // row_byte_size
+        row_byte_size_full = 9 * np.dtype(ROW_DTYPE).itemsize  # 72 B per (9-int64) row in .parts
+        if drop_col_c:
+            # Write header once, then stream payloads converting 9-col → 6-col.
+            with open(output_file, "wb") as dst:
+                _write_tm_compact_header(dst, target_sum)
+                for r in range(size):
+                    part = os.path.join(manifest["parts_dir"], f"rank_{r:04d}.bin")
+                    if not os.path.exists(part) or os.path.getsize(part) == 0:
+                        continue
+                    payload = _read_bucket_bytes(part)
+                    if not payload:
+                        continue
+                    assert len(payload) % row_byte_size_full == 0, (
+                        f"part {part}: decoded payload size {len(payload)} "
+                        f"not a multiple of {row_byte_size_full}-byte row"
+                    )
+                    n_part = len(payload) // row_byte_size_full
+                    arr = np.frombuffer(payload, dtype=ROW_DTYPE).reshape(n_part, 9)
+                    # Sanity: each row must satisfy Y0+Y1+Y2 == target_sum.
+                    # Verifying here (cheap) avoids silent corruption on read.
+                    # NOTE: this is the ONE arithmetic check; downstream readers
+                    # do NOT re-verify (they trust the writer).
+                    if n_part:
+                        ssum = arr[:, 0:3] + arr[:, 3:6] + arr[:, 6:9]
+                        if not np.array_equal(ssum, np.broadcast_to(target_sum, (n_part, 3))):
+                            mismatch = int((ssum != target_sum[None, :]).any(axis=1).sum())
+                            raise RuntimeError(
+                                f"part {part}: {mismatch}/{n_part} rows do NOT sum to "
+                                f"target_sum {tuple(target_sum.tolist())} — refusing to "
+                                f"write a compact file we can't read back correctly."
+                            )
+                    # Drop columns 6..8 (Y_c). Write columns 0..5 only.
+                    ab = np.ascontiguousarray(arr[:, 0:6], dtype=ROW_DTYPE)
+                    dst.write(ab.tobytes())
+                    rows_written += n_part
+            manifest["format"] = "Z9TC_v1"
+            manifest["row_byte_size"] = _TM_COMPACT_ROW_BYTES
+            manifest["target_sum"] = [int(x) for x in target_sum.tolist()]
+        else:
+            row_byte_size = row_byte_size_full
+            for r in range(size):
+                part = os.path.join(manifest["parts_dir"], f"rank_{r:04d}.bin")
+                if not os.path.exists(part) or os.path.getsize(part) == 0:
+                    continue
+                payload = _read_bucket_bytes(part)
+                if not payload:
+                    continue
+                assert len(payload) % row_byte_size == 0, (
+                    f"part {part}: decoded payload size {len(payload)} "
+                    f"not a multiple of {row_byte_size}-byte row"
+                )
+                with open(output_file, "ab") as dst:
+                    dst.write(payload)
+                rows_written += len(payload) // row_byte_size
+            manifest["format"] = "raw_9int64"
+            manifest["row_byte_size"] = row_byte_size_full
         manifest["rows_written"] = rows_written
         manifest["completed"] = True
         manifest["wall_total_time"] = float(time.time() - wall_t0)
@@ -1118,6 +1259,7 @@ def select_triples_mpi(
         if verbose:
             print(f"wrote final output: {output_file}")
             print(f"total rows written: {rows_written}")
+            print(f"output format: {manifest['format']}")
             print(f"wall total time: {manifest['wall_total_time']:.3f} s")
         return manifest
     return None
@@ -1150,6 +1292,13 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--no_dedup", action="store_true")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--drop_col_c", action="store_true",
+                        help="Write the final TM file in the compact 'Z9TC' "
+                             "format: 32-byte header (target_sum) + 6 int64 per "
+                             "row (Y_a, Y_b). Y_c is reconstructed on read by "
+                             "downstream readers as target_sum - Y_a - Y_b. "
+                             "Lossless; saves 1/3 on the final TM file size. "
+                             "Default OFF for back-compat with older artifacts.")
     args = parser.parse_args()
 
     out = select_triples_mpi(
@@ -1166,6 +1315,7 @@ if __name__ == "__main__":
         rank_flush_rows=args.rank_flush_rows,
         resume=args.resume,
         verbose=not args.quiet,
+        drop_col_c=args.drop_col_c,
     )
     if MPI.COMM_WORLD.Get_rank() == 0 and args.quiet:
         print(out)
