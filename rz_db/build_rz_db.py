@@ -29,6 +29,9 @@ from rz_db.rz_lookup import RzLookupDB, V_SHAPE  # noqa: E402
 
 def detect_schema(fieldnames: list[str]) -> str:
     fs = set(fieldnames or [])
+    # sweep_zeta9_batched.py emits wall_stage5_batched_share + eps_pre, cell_NNNN.json files
+    if "wall_stage5_batched_share" in fs and "eps_target" in fs and "theta_idx" in fs:
+        return "zeta9_batched"
     if "max_f" in fs and "theta_idx" in fs and "eps_target" in fs:
         return "zeta9_cal"
     if "theta_idx" in fs and "epsilon" in fs and "method" in fs:
@@ -36,6 +39,23 @@ def detect_schema(fieldnames: list[str]) -> str:
     if "theta" in fs and "epsilon" in fs and "method" in fs:
         return "hrsa_legacy"
     return "unknown"
+
+
+def parse_row_zeta9_batched(row: dict, csv_dir: Path):
+    """Return (json_path, eps_target, source_tag) for a sweep_zeta9_batched.py row.
+
+    Per-cell JSONs are named cell_{theta_idx:04d}.json (qid uses 4-digit zero pad).
+    """
+    max_f = int(row["max_f"])
+    theta_idx = int(row["theta_idx"])
+    json_path = csv_dir / f"cell_{theta_idx:04d}.json"
+    eps_target = float(row["eps_target"])
+    source = f"zeta9_batched:maxf{max_f}:t{theta_idx:04d}:eps{eps_target:g}"
+    return json_path, eps_target, source
+
+
+def is_success_zeta9_batched(row: dict) -> bool:
+    return str(row.get("success", "")).strip().lower() == "true"
 
 
 def hrsa_label(theta: float, eps: float) -> str:
@@ -186,7 +206,16 @@ def ingest_csv(csv_path: Path, db: RzLookupDB, verbose: bool = False) -> dict:
             # Strip CRs from all values (CSVs may be CRLF)
             row = {k: (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
 
-            if schema == "zeta9_cal":
+            if schema == "zeta9_batched":
+                if not is_success_zeta9_batched(row):
+                    counters["rows_not_success"] += 1
+                    continue
+                try:
+                    json_path, eps_target, source = parse_row_zeta9_batched(row, csv_dir)
+                except (KeyError, ValueError):
+                    counters["rows_skipped_parse_error"] += 1
+                    continue
+            elif schema == "zeta9_cal":
                 if not is_success_zeta9_cal(row):
                     counters["rows_not_success"] += 1
                     continue
