@@ -234,12 +234,16 @@ def sk_rz_compile_ring(theta: float, eps_target: float, db: RzLookupDB,
 
 if __name__ == "__main__":
     import argparse
+    import json as _json
     import os
     p = argparse.ArgumentParser()
     p.add_argument("--theta", type=float, required=True)
     p.add_argument("--eps", type=float, default=1e-5)
     p.add_argument("--max-depth", type=int, default=2)
     p.add_argument("--db", default=os.environ.get("RZ_DB_PATH", "/tmp/rz_test.sqlite"))
+    p.add_argument("--output", type=str, default=None,
+                   help="Write the ringZ9 (V_blob, f) to this .json file "
+                        "for downstream tools (e.g. canonical_reducer.py).")
     args = p.parse_args()
 
     db = RzLookupDB(args.db)
@@ -255,3 +259,8 @@ if __name__ == "__main__":
         digits = len(str(res['max_abs_coef']))
         print(f"  max |coef|     ≈ 10^{digits-1} ({digits} digits)")
         print(f"  ⚠ decompose_tool would need to handle big-int coefs at this f")
+    if args.output is not None and "V_blob_ints" in res:
+        # JSON dump uses int (Python big int natively serialized).
+        with open(args.output, "w") as fh:
+            _json.dump({"f": int(res["v_f"]), "V": res["V_blob_ints"]}, fh)
+        print(f"  wrote ring V to {args.output}")
