@@ -123,11 +123,77 @@ def _approximate_via_euler(U_target: np.ndarray, eps_u: float,
     }
 
 
+def sk_general(U_target: np.ndarray, eps_target: float,
+               db: RzLookupDB, cliffords: np.ndarray,
+               depth: int, max_depth: int,
+               log: list) -> dict:
+    """Recursive SK on a general U(3) target.
+
+    Base case: Euler-decompose + R_z DB lookup. If achieved frob > eps_target,
+    recurse via commutator factorization; each factor is itself SK-approximated
+    at sqrt-precision.
+
+    Returns dict {V (3,3 complex), N_D, achieved_frob, success}.
+    """
+    base = _approximate_via_euler(U_target, max(eps_target * 10, 0.5),
+                                  db, cliffords)
+    if not base["success"]:
+        # Couldn't even reach a loose base
+        log.append({"depth": depth, "event": "general_no_base"})
+        return {"V": None, "N_D": -1, "achieved_frob": float("inf"),
+                "success": False}
+
+    V_base = base["V"]
+    eps_base = float(np.linalg.norm(V_base - U_target, ord="fro"))
+
+    if eps_base <= eps_target:
+        log.append({"depth": depth, "event": "general_base_ok",
+                    "eps_base": eps_base})
+        return {"V": V_base, "N_D": base["N_D_sum"],
+                "achieved_frob": eps_base, "success": True}
+
+    if depth >= max_depth:
+        log.append({"depth": depth, "event": "general_max_depth",
+                    "eps_base": eps_base})
+        return {"V": V_base, "N_D": base["N_D_sum"],
+                "achieved_frob": eps_base, "success": False}
+
+    # Commutator recursion
+    E = U_target @ V_base.conj().T
+    A_t, B_t, comm_residual = factor_commutator(E, polish=True)
+
+    # Per-factor precision: balance with the eps_base^{3/2} term
+    eps_factor = max((eps_target - eps_base ** 1.5) / max(4 * np.sqrt(eps_base), 1e-15),
+                     eps_base ** 1.5)
+    log.append({"depth": depth, "event": "general_commutator",
+                "eps_base": eps_base, "eps_factor_required": eps_factor,
+                "comm_residual": comm_residual})
+
+    r_A = sk_general(A_t, eps_factor, db, cliffords, depth + 1, max_depth, log)
+    r_B = sk_general(B_t, eps_factor, db, cliffords, depth + 1, max_depth, log)
+
+    if r_A["V"] is None or r_B["V"] is None:
+        return {"V": V_base, "N_D": base["N_D_sum"],
+                "achieved_frob": eps_base, "success": False}
+
+    V_total = r_A["V"] @ r_B["V"] @ r_A["V"].conj().T @ r_B["V"].conj().T @ V_base
+    achieved = float(np.linalg.norm(V_total - U_target, ord="fro"))
+    N_D_total = base["N_D_sum"] + 2 * r_A["N_D"] + 2 * r_B["N_D"]
+
+    return {"V": V_total, "N_D": N_D_total,
+            "achieved_frob": achieved, "success": achieved <= eps_target}
+
+
 def sk_rz_compile(theta: float, eps_target: float,
                   db: RzLookupDB,
                   cliffords=None,
+                  max_depth: int = 1,
                   verbose: bool = False) -> dict:
-    """Single-level SK synthesis of R_z(theta) at target Frobenius accuracy.
+    """Multi-level SK synthesis of R_z(theta) at target Frobenius accuracy.
+
+    Depth 0 base: R_z DB lookup (uses Clifford 6-fold + negation fold).
+    Depth 1+ recursion: general-U(3) SK via Euler-decomp + R_z DB (sk_general).
+    max_depth=1 is single-level (original behavior). max_depth=2 reaches ε^{9/4}.
 
     Returns dict with:
       V (3,3 complex)             — synthesized unitary
@@ -198,54 +264,43 @@ def sk_rz_compile(theta: float, eps_target: float,
                 "norm_A_minus_I": float(np.linalg.norm(A_target - np.eye(3), ord="fro")),
                 "norm_B_minus_I": float(np.linalg.norm(B_target - np.eye(3), ord="fro"))})
 
-    # Per-Euler-leaf precision target: ε_A ≈ eps_target / eps_base would balance
-    # the SK contraction. Practically, use ε_A = eps_target / (factor of safety).
-    # The contraction math: ||V_total - R_target||_F ≤ ε_A · eps_base + C · eps_base^{3/2}
-    # Solving for ε_A: ε_A = max(eps_target / 2, eps_base^{1.5}) / eps_base.
-    eps_A = max(eps_target * 0.5, eps_base ** 1.5) / max(eps_base, 1e-15)
-
+    # Per-factor precision: ||V_total - target||_F ≤ 4·ε_A·√eps_base + eps_base^{3/2}
+    eps_factor = max((eps_target - eps_base ** 1.5) / max(4 * np.sqrt(eps_base), 1e-15),
+                     eps_base ** 1.5)
     if verbose:
         print(f"[sk_rz] eps_base={eps_base:.3e}, eps_target={eps_target:.3e}, "
-              f"eps_A_required={eps_A:.3e}")
+              f"eps_factor_required={eps_factor:.3e}, max_depth={max_depth}")
 
-    V_A = _approximate_via_euler(A_target, eps_A, db, cliffords)
-    V_B = _approximate_via_euler(B_target, eps_A, db, cliffords)
+    # Recursive SK on A, B (depth=1 here means: we're at level 1 of overall SK)
+    r_A = sk_general(A_target, eps_factor, db, cliffords, depth=1,
+                     max_depth=max_depth, log=log)
+    r_B = sk_general(B_target, eps_factor, db, cliffords, depth=1,
+                     max_depth=max_depth, log=log)
 
-    log.append({"step": "factor_A", "n_leaves": V_A["n_leaves"],
-                "n_misses": V_A["n_db_misses"], "N_D": V_A["N_D_sum"],
-                "success": V_A["success"]})
-    log.append({"step": "factor_B", "n_leaves": V_B["n_leaves"],
-                "n_misses": V_B["n_db_misses"], "N_D": V_B["N_D_sum"],
-                "success": V_B["success"]})
-
-    if not (V_A["success"] and V_B["success"]):
+    if r_A["V"] is None or r_B["V"] is None:
+        log.append({"step": "factor_failed", "A_ok": r_A["V"] is not None,
+                    "B_ok": r_B["V"] is not None})
         return {"V": V_base, "N_D": int(base["N_D"] or 0),
                 "achieved_frob": eps_base, "success": False,
                 "path": "sk_factor_failed", "eps_base": eps_base, "log": log}
 
-    # === Step 4: assemble V_total = V_A · V_B · V_A† · V_B† · V_base ===
-    A = V_A["V"]
-    B = V_B["V"]
+    A = r_A["V"]
+    B = r_B["V"]
     V_total = A @ B @ A.conj().T @ B.conj().T @ V_base
 
     achieved = float(np.linalg.norm(V_total - R_target, ord="fro"))
-    # N_D: each of A, B used once + their daggers (free) → 2·N_D_A + 2·N_D_B
-    # Wait — A and A^† each cost N_D_A (dagger of Clifford+D is itself Clifford+D
-    # with same gate count). So total Clifford+D word uses 2·N_D_A + 2·N_D_B
-    # for the commutator + N_D_base for V_base.
     N_D_total = (int(base["N_D"] or 0)
-                 + 2 * V_A["N_D_sum"]
-                 + 2 * V_B["N_D_sum"])
+                 + 2 * r_A["N_D"] + 2 * r_B["N_D"])
 
     log.append({"step": "assemble", "achieved": achieved,
-                "N_D_total": N_D_total})
+                "N_D_total": N_D_total, "N_D_A": r_A["N_D"], "N_D_B": r_B["N_D"]})
 
     return {
         "V": V_total,
         "N_D": N_D_total,
         "achieved_frob": achieved,
         "success": achieved <= eps_target,
-        "path": "sk_one_level",
+        "path": f"sk_max_depth_{max_depth}",
         "eps_base": eps_base,
         "log": log,
     }
@@ -259,10 +314,12 @@ if __name__ == "__main__":
     parser.add_argument("--eps", type=float, default=1e-5)
     parser.add_argument("--db", default=os.environ.get("RZ_DB_PATH", "/tmp/rz_test.sqlite"))
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--max-depth", type=int, default=1)
     args = parser.parse_args()
 
     db = RzLookupDB(args.db)
-    res = sk_rz_compile(args.theta, args.eps, db, verbose=args.verbose)
+    res = sk_rz_compile(args.theta, args.eps, db,
+                        max_depth=args.max_depth, verbose=args.verbose)
     print(f"theta={args.theta}  eps_target={args.eps}")
     print(f"  achieved_frob = {res['achieved_frob']:.6e}")
     print(f"  N_D           = {res['N_D']}")
