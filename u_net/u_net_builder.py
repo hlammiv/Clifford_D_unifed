@@ -336,32 +336,58 @@ def live_synthesize_rz(theta: float, eps_target: float,
 #  Leaf resolution — DB lookup with lazy fallback
 # ---------------------------------------------------------------------------
 
-def _theta_canonical(theta: float) -> tuple[float, bool]:
-    """Fold theta into [0, pi/2] using R_z symmetries.
+_RZ_CLIFFORD_2K3_CACHE: dict[int, np.ndarray] = {}
 
-    The R_z DB stores only positive theta in roughly [0, pi/2].  Two clean
-    symmetries let us reduce a broader angle range into that window:
 
-      * ``R_z(θ + 2π) = -R_z(θ)`` (global phase factor -1, irrelevant for our
-        SU(3) net since we strip global phase from V_total).
-      * ``R_z(-θ) = R_z(θ)^†`` (so a stored approximation V(|θ|) gives V^†
-        as the approximation for R_z(-θ)).
+def _rz_clifford_2k3(k: int) -> np.ndarray:
+    """Return R^Z_{(0,1)}(2πk/3) = diag(e^{-iπk/3}, e^{+iπk/3}, 1) as (3,3) complex.
 
-    Returns ``(theta_abs, daggered)`` where ``theta_abs ∈ [0, π]`` and
-    ``daggered`` indicates whether the caller should conjugate-transpose
-    the looked-up V.
-
-    NOTE: this does NOT reduce |theta| > π/2 into [0, π/2]; that requires an
-    extra free-Clifford absorption (R_z(π) = diag(i, -i, 1) * global phase,
-    a Clifford up to phase).  We leave that to a future iteration; leaves
-    with |theta| > π/2 will miss the existing DB and rely on live fallback
-    or be dropped.
+    Uses the HRSA convention R^Z_{(0,1)}(θ) = diag(e^{-iθ/2}, e^{+iθ/2}, 1)
+    (negative on entry 0). For k ∈ {0, 1, ..., 5} this is an exact qutrit
+    Clifford (k=0,1,2: ζ₉-power diag; k=3,4,5: sign-extended versions).
+    Verified 2026-05-23.
     """
-    # Wrap into (-π, π].
-    t = (theta + math.pi) % (2.0 * math.pi) - math.pi
-    if t < 0:
-        return -t, True
-    return t, False
+    if k not in _RZ_CLIFFORD_2K3_CACHE:
+        _RZ_CLIFFORD_2K3_CACHE[k] = np.diag([
+            np.exp(-1j * np.pi * k / 3.0),
+            np.exp(+1j * np.pi * k / 3.0),
+            1.0 + 0j,
+        ]).astype(np.complex128)
+    return _RZ_CLIFFORD_2K3_CACHE[k]
+
+
+def _theta_canonical(theta: float) -> tuple[float, int, bool]:
+    """Fold theta into [0, π/3] via Clifford 6-fold + negation symmetry.
+
+    R_z(θ) = diag(e^{iθ/2}, e^{-iθ/2}, 1) has period 4π (not 2π), since the
+    exponent carries a θ/2 factor. Two free symmetries:
+      * negation:        R_z(-θ) = R_z(θ)†
+      * Clifford k-fold: R_z(θ + 2πk/3) = R_z(2πk/3) · R_z(θ)
+                         where R_z(2πk/3) is a qutrit Clifford for ANY k ∈ Z.
+                         (k=0 → I; k=1,2 → ζ₉-power diag; k=3 → diag(-1,-1,1)
+                         sign extension; k=4,5 → k=1,2 with sign extension.)
+
+    Composing: fundamental domain is [0, π/3] with k ∈ {0, ..., 5}.
+
+    Returns ``(theta_canonical, k, daggered)`` such that:
+        V_lookup ≈ R_z(theta_canonical)            (from the DB)
+        V_target = R_z(2πk/3) · (V_lookup† if daggered else V_lookup)
+                 ≈ R_z(theta)                       (the user's actual target)
+
+    The caller is responsible for the post-processing (dagger + Clifford).
+    """
+    # Step 1: wrap into [0, 4π) — full R_z period
+    t = theta % (4.0 * math.pi)
+    # Step 2: nearest 2π/3 multiple — keep raw k for t subtraction, mod for return
+    third = 2.0 * math.pi / 3.0
+    k_raw = int(round(t / third))   # {0, 1, ..., 6}
+    t = t - k_raw * third            # now in roughly (-π/3, π/3]
+    k = k_raw % 6                    # canonical Clifford index
+    # Step 3: negation fold to [0, π/3]
+    daggered = t < 0
+    if daggered:
+        t = -t
+    return t, k, daggered
 
 
 def _resolve_z_leaf(theta: float, eps_leaf: float,
@@ -374,12 +400,14 @@ def _resolve_z_leaf(theta: float, eps_leaf: float,
     or None if no synthesis is available and allow_live_fallback is False
     (or the live fallback also fails).
     """
-    theta_abs, daggered = _theta_canonical(theta)
-    res = db.lookup(theta_abs, eps_leaf)
+    theta_canonical, k_cliff, daggered = _theta_canonical(theta)
+    res = db.lookup(theta_canonical, eps_leaf)
     if res is not None:
         V_complex = _v_blob_to_complex(res["V"], res["v_f"])
         if daggered:
             V_complex = V_complex.conj().T
+        if k_cliff != 0:
+            V_complex = _rz_clifford_2k3(k_cliff) @ V_complex
         return {
             "V": V_complex,
             "N_D": res["N_D"],
@@ -392,16 +420,16 @@ def _resolve_z_leaf(theta: float, eps_leaf: float,
     if not allow_live_fallback:
         return None
 
-    # Live fallback: pick HRSA / zeta9 by eps.  Use theta_abs (positive)
-    # so the inserted entry serves future symmetry-folded queries too.
-    live = live_synthesize_rz(theta_abs, eps_leaf, method="auto", timeout=timeout)
+    # Live fallback: pick HRSA / zeta9 by eps.  Use theta_canonical (positive,
+    # in [0, π/3]) so the inserted entry serves future symmetry-folded queries.
+    live = live_synthesize_rz(theta_canonical, eps_leaf, method="auto", timeout=timeout)
     if live is None:
         return None
 
     # Insert into the DB so the next builder run sees it (lazy population).
     try:
         db.insert(
-            theta=float(theta_abs),
+            theta=float(theta_canonical),
             eps_target=float(eps_leaf),
             V=live["V"],
             v_f=int(live["v_f"]),
@@ -412,12 +440,14 @@ def _resolve_z_leaf(theta: float, eps_leaf: float,
         )
         db.commit()
     except Exception as exc:
-        print(f"[u_net_builder] DB insert failed for theta={theta_abs:.6f} "
+        print(f"[u_net_builder] DB insert failed for theta={theta_canonical:.6f} "
               f"eps={eps_leaf:.3g}: {exc!r}", file=sys.stderr)
 
     V_complex = _v_blob_to_complex(live["V"], int(live["v_f"]))
     if daggered:
         V_complex = V_complex.conj().T
+    if k_cliff != 0:
+        V_complex = _rz_clifford_2k3(k_cliff) @ V_complex
     return {
         "V": V_complex,
         "N_D": live["N_D"],
@@ -480,12 +510,14 @@ def _reify_factors(factors: list,
                 continue
             # We need a sub-call that distinguishes DB-hit vs DB-miss-but-live-recovered
             # vs total-failure.  Do the DB lookup inline so we can update counters.
-            theta_abs, daggered = _theta_canonical(theta)
-            res = db.lookup(theta_abs, eps_leaf)
+            theta_canonical, k_cliff, daggered = _theta_canonical(theta)
+            res = db.lookup(theta_canonical, eps_leaf)
             if res is not None:
                 V = _v_blob_to_complex(res["V"], res["v_f"])
                 if daggered:
                     V = V.conj().T
+                if k_cliff != 0:
+                    V = _rz_clifford_2k3(k_cliff) @ V
                 V_total = V_total @ V
                 if res["N_D"] is not None:
                     N_D_sum += int(res["N_D"])
@@ -497,7 +529,7 @@ def _reify_factors(factors: list,
                 fully_failed = True
                 n_unresolved += 1
                 continue
-            live = live_synthesize_rz(theta_abs, eps_leaf, method="auto",
+            live = live_synthesize_rz(theta_canonical, eps_leaf, method="auto",
                                       timeout=timeout)
             if live is None:
                 fully_failed = True
@@ -506,7 +538,7 @@ def _reify_factors(factors: list,
             # Insert into DB for future runs.
             try:
                 db.insert(
-                    theta=float(theta_abs),
+                    theta=float(theta_canonical),
                     eps_target=float(eps_leaf),
                     V=live["V"],
                     v_f=int(live["v_f"]),
@@ -517,11 +549,13 @@ def _reify_factors(factors: list,
                 )
                 db.commit()
             except Exception as exc:
-                print(f"[u_net_builder] DB insert failed for theta={theta_abs:.6f} "
+                print(f"[u_net_builder] DB insert failed for theta={theta_canonical:.6f} "
                       f"eps={eps_leaf:.3g}: {exc!r}", file=sys.stderr)
             V = _v_blob_to_complex(live["V"], int(live["v_f"]))
             if daggered:
                 V = V.conj().T
+            if k_cliff != 0:
+                V = _rz_clifford_2k3(k_cliff) @ V
             V_total = V_total @ V
             if live["N_D"] is not None:
                 N_D_sum += int(live["N_D"])

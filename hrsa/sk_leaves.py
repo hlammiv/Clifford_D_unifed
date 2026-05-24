@@ -381,18 +381,19 @@ def synthesize_leaf(theta: float, eps: float, i: int, j: int) -> dict:
             "exception": repr(exc),
         }
 
-    # Fold theta into [0, pi] using R_z(-theta) = R_z(theta)^†.
-    theta_abs = abs(theta_red)
-    daggered = theta_red < 0.0
+    # Fold theta into [0, π/3] using R_z Clifford 6-fold + negation symmetry.
+    # See u_net.u_net_builder._theta_canonical for derivation.
+    from u_net_builder import _theta_canonical, _rz_clifford_2k3  # type: ignore
+    theta_canonical, k_cliff, daggered = _theta_canonical(theta_red)
 
     # (a) Look up.  The DB lookup returns None on miss.
-    res = db.lookup(theta_abs, eps)
+    res = db.lookup(theta_canonical, eps)
     if res is None:
         # (c) Live fallback.  Insert on success.
         live = None
         try:
             from u_net_builder import live_synthesize_rz  # type: ignore
-            live = live_synthesize_rz(theta_abs, eps, method="auto", timeout=180)
+            live = live_synthesize_rz(theta_canonical, eps, method="auto", timeout=180)
         except Exception as exc:
             live = None
             live_exc = repr(exc)
@@ -409,7 +410,7 @@ def synthesize_leaf(theta: float, eps: float, i: int, j: int) -> dict:
         # Insert.
         try:
             db.insert(
-                theta=float(theta_abs),
+                theta=float(theta_canonical),
                 eps_target=float(eps),
                 V=live["V"],
                 v_f=int(live["v_f"]),
@@ -431,12 +432,17 @@ def synthesize_leaf(theta: float, eps: float, i: int, j: int) -> dict:
             "source": "live_fallback",
         }
 
-    # (b) Reify V (ringZ9 → complex) and apply subspace conjugation.
+    # (b) Reify V (ringZ9 → complex), apply Clifford fold post-processing,
+    # then apply subspace conjugation P · V · P†.
     V_blob = res["V"]
     v_f = int(res["v_f"])
     V01_complex = _ringZ9_blob_to_complex(V_blob, v_f)
     if daggered:
         V01_complex = V01_complex.conj().T
+    if k_cliff != 0:
+        # Pre-multiply by the (free) R^Z_{(0,1)}(2πk/3) Clifford to reconstruct
+        # the original target's R^Z_{(0,1)}(theta_red) approximation.
+        V01_complex = _rz_clifford_2k3(k_cliff) @ V01_complex
     V_ij = P @ V01_complex @ Pdag
     err = float(np.linalg.norm(V_ij - target, ord="fro"))
 
