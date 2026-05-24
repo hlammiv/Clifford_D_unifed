@@ -6,5 +6,15 @@ delivers only the Gram-matrix foundation: an integer Gram `B`, a numpy-only
 reduction of `B` cached at module-import time.
 """
 from cvp.gram import B, B_LLL_CACHE, U_lll, B_lll, lll_reduce, q_form
+from cvp.babai import babai_x1, minkowski_embedding
 
-__all__ = ["B", "B_lll", "U_lll", "B_LLL_CACHE", "lll_reduce", "q_form"]
+__all__ = [
+    "B",
+    "B_lll",
+    "U_lll",
+    "B_LLL_CACHE",
+    "lll_reduce",
+    "q_form",
+    "babai_x1",
+    "minkowski_embedding",
+]
