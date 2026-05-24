@@ -59,6 +59,278 @@ if str(_UNIFIED) not in sys.path:
 
 from ep_level import Z9, Z9Frac, matmul, conjugate_transpose
 
+# ---------------------------------------------------------------------------
+# gmpy2-accelerated big-int shim for the hot path.
+#
+# The peel loop spends ~all its time multiplying numerator polynomials whose
+# coefficients are Python big-ints with up to ~10^1934 digits (at SK depth-2
+# f≈4052).  Python's int uses Karatsuba and is fast in absolute terms, but
+# gmpy2.mpz wraps GMP's mul (Toom-Cook / FFT thresholds, no Python object
+# overhead per op), giving an asymptotic + constant-factor win.
+#
+# We define light-weight `_FastZ9` / `_FastZ9Frac` mirrors of ep_level.Z9 /
+# Z9Frac whose coefficient type is `_INT` (mpz if gmpy2 is available, else
+# plain int — strict-correctness fallback).  All hot-path code below
+# (_reduce_by_three, _prefix_times_V_00, matmul, sde_chi_*, etc.) is
+# rewritten against these fast types.  We keep ep_level.Z9/Z9Frac as the
+# canonical low-throughput types for the gate-table construction (one-shot
+# at startup) and for the verify_decomposition step.
+# ---------------------------------------------------------------------------
+try:
+    from gmpy2 import mpz as _INT
+    _HAVE_GMPY2 = True
+except ImportError:  # pragma: no cover — gmpy2 missing
+    _INT = int
+    _HAVE_GMPY2 = False
+
+_INT_ZERO = _INT(0)
+_INT_ONE = _INT(1)
+_INT_THREE = _INT(3)
+
+
+def _reduce_9_fast(c: list) -> tuple:
+    """Reduce a polynomial of degree up to 10 in ξ to a 6-tuple over the
+    Z-basis (1, ξ, ξ², ξ³, ξ⁴, ξ⁵).  Same reduction as ep_level._reduce_9
+    but type-preserving on _INT coefficients."""
+    # First fold powers ≥ 9 using ξ^9 = 1.
+    out = [_INT_ZERO] * 9
+    for k in range(len(c)):
+        out[k % 9] = out[k % 9] + c[k]
+    # Now use ξ⁶ = -1 - ξ³, ξ⁷ = -ξ - ξ⁴, ξ⁸ = -ξ² - ξ⁵.
+    if out[6]:
+        out[0] = out[0] - out[6]
+        out[3] = out[3] - out[6]
+    if out[7]:
+        out[1] = out[1] - out[7]
+        out[4] = out[4] - out[7]
+    if out[8]:
+        out[2] = out[2] - out[8]
+        out[5] = out[5] - out[8]
+    return (out[0], out[1], out[2], out[3], out[4], out[5])
+
+
+class _FastZ9:
+    """gmpy2-mpz-backed mirror of ep_level.Z9 (Z[ξ] element).
+
+    Same 6-tuple Z-basis (1, ξ, ξ², ξ³, ξ⁴, ξ⁵); same ξ⁹=1 +
+    ξ⁶=−1−ξ³ reductions.  Designed to be a drop-in replacement in the
+    canonical_reducer hot path."""
+    __slots__ = ("coefs",)
+
+    def __init__(self, coefs):
+        # coefs is a 6-tuple/list; we DO NOT re-wrap if already _INT to
+        # keep zero/one constants fast.
+        self.coefs = tuple(coefs)
+
+    @staticmethod
+    def zero() -> "_FastZ9":
+        return _FZ9_ZERO
+
+    @staticmethod
+    def one() -> "_FastZ9":
+        return _FZ9_ONE
+
+    @staticmethod
+    def from_int(n) -> "_FastZ9":
+        return _FastZ9((_INT(n), _INT_ZERO, _INT_ZERO, _INT_ZERO, _INT_ZERO, _INT_ZERO))
+
+    def is_zero(self) -> bool:
+        c = self.coefs
+        return not (c[0] or c[1] or c[2] or c[3] or c[4] or c[5])
+
+    def __add__(self, other: "_FastZ9") -> "_FastZ9":
+        a = self.coefs; b = other.coefs
+        return _FastZ9((a[0]+b[0], a[1]+b[1], a[2]+b[2],
+                        a[3]+b[3], a[4]+b[4], a[5]+b[5]))
+
+    def __neg__(self) -> "_FastZ9":
+        c = self.coefs
+        return _FastZ9((-c[0], -c[1], -c[2], -c[3], -c[4], -c[5]))
+
+    def __sub__(self, other: "_FastZ9") -> "_FastZ9":
+        a = self.coefs; b = other.coefs
+        return _FastZ9((a[0]-b[0], a[1]-b[1], a[2]-b[2],
+                        a[3]-b[3], a[4]-b[4], a[5]-b[5]))
+
+    def __mul__(self, other) -> "_FastZ9":
+        if isinstance(other, _FastZ9):
+            a = self.coefs; b = other.coefs
+            # Polynomial multiplication, max degree 10.  Inline-unrolled
+            # accumulation; skip zero a[i] to avoid the wasted mul calls
+            # on the H-prefix sparse-row hot path.
+            prod = [_INT_ZERO] * 11
+            for i in range(6):
+                ai = a[i]
+                if not ai:
+                    continue
+                prod[i]   = prod[i]   + ai*b[0]
+                prod[i+1] = prod[i+1] + ai*b[1]
+                prod[i+2] = prod[i+2] + ai*b[2]
+                prod[i+3] = prod[i+3] + ai*b[3]
+                prod[i+4] = prod[i+4] + ai*b[4]
+                prod[i+5] = prod[i+5] + ai*b[5]
+            return _FastZ9(_reduce_9_fast(prod))
+        # scalar (int / mpz)
+        n = _INT(other) if not isinstance(other, type(_INT_ZERO)) else other
+        if not n:
+            return _FZ9_ZERO
+        c = self.coefs
+        return _FastZ9((c[0]*n, c[1]*n, c[2]*n, c[3]*n, c[4]*n, c[5]*n))
+
+    def __rmul__(self, other) -> "_FastZ9":
+        return self.__mul__(other)
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, _FastZ9) and self.coefs == other.coefs
+
+    def __hash__(self) -> int:
+        return hash(self.coefs)
+
+    def conjugate(self) -> "_FastZ9":
+        """σ_8: ξ ↦ ξ⁸ = ξ⁻¹ (complex conjugation)."""
+        c = self.coefs
+        # σ_8(a_0 + a_1 ξ + ... + a_5 ξ⁵)
+        #   = a_0 + a_1 ξ⁸ + a_2 ξ¹⁶ + a_3 ξ²⁴ + a_4 ξ³² + a_5 ξ⁴⁰
+        # Reduce exponents mod 9: 16→7, 24→6, 32→5, 40→4.
+        # Build polynomial of degree up to 40 then reduce.
+        poly = [_INT_ZERO] * 41
+        # exponent map: a_i goes to position (i*8) % 9 but with ξ⁹=1 first.
+        # We build pre-reduce poly of length 41 to share _reduce_9_fast.
+        poly[0]  = c[0]
+        poly[8]  = c[1]
+        poly[16] = c[2]
+        poly[24] = c[3]
+        poly[32] = c[4]
+        poly[40] = c[5]
+        return _FastZ9(_reduce_9_fast(poly))
+
+
+_FZ9_ZERO = _FastZ9((_INT_ZERO,)*6)
+_FZ9_ONE  = _FastZ9((_INT_ONE, _INT_ZERO, _INT_ZERO, _INT_ZERO, _INT_ZERO, _INT_ZERO))
+
+
+class _FastZ9Frac:
+    """gmpy2-mpz-backed mirror of ep_level.Z9Frac (Z[ξ, 1/3] element).
+
+    value = num / 3^denom_pow3, with num : _FastZ9.  Same interface as
+    Z9Frac (add/sub/mul/neg/conjugate/is_zero/.zero()/.one()), so it's
+    drop-in for any code that's generic over the ring element type."""
+    __slots__ = ("num", "denom_pow3")
+
+    def __init__(self, num: _FastZ9, denom_pow3: int):
+        self.num = num
+        self.denom_pow3 = denom_pow3
+
+    @staticmethod
+    def zero() -> "_FastZ9Frac":
+        return _FastZ9Frac(_FZ9_ZERO, 0)
+
+    @staticmethod
+    def one() -> "_FastZ9Frac":
+        return _FastZ9Frac(_FZ9_ONE, 0)
+
+    @staticmethod
+    def from_int(n) -> "_FastZ9Frac":
+        return _FastZ9Frac(_FastZ9.from_int(n), 0)
+
+    def is_zero(self) -> bool:
+        return self.num.is_zero()
+
+    def _align(self, other: "_FastZ9Frac"):
+        ds = self.denom_pow3; do = other.denom_pow3
+        if ds == do:
+            return self.num, other.num, ds
+        d = ds if ds >= do else do
+        lhs = self.num
+        rhs = other.num
+        if ds < d:
+            lhs = lhs * (_INT_THREE ** (d - ds))
+        if do < d:
+            rhs = rhs * (_INT_THREE ** (d - do))
+        return lhs, rhs, d
+
+    def __add__(self, other: "_FastZ9Frac") -> "_FastZ9Frac":
+        a, b, d = self._align(other)
+        return _FastZ9Frac(a + b, d)
+
+    def __neg__(self) -> "_FastZ9Frac":
+        return _FastZ9Frac(-self.num, self.denom_pow3)
+
+    def __sub__(self, other: "_FastZ9Frac") -> "_FastZ9Frac":
+        a, b, d = self._align(other)
+        return _FastZ9Frac(a - b, d)
+
+    def __mul__(self, other) -> "_FastZ9Frac":
+        if isinstance(other, _FastZ9Frac):
+            return _FastZ9Frac(self.num * other.num,
+                               self.denom_pow3 + other.denom_pow3)
+        if isinstance(other, _FastZ9):
+            return _FastZ9Frac(self.num * other, self.denom_pow3)
+        # int / mpz
+        return _FastZ9Frac(self.num * other, self.denom_pow3)
+
+    def __rmul__(self, other) -> "_FastZ9Frac":
+        return self.__mul__(other)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, _FastZ9Frac):
+            return False
+        a, b, _ = self._align(other)
+        return a == b
+
+    def __hash__(self) -> int:
+        return hash((self.num, self.denom_pow3))
+
+    def conjugate(self) -> "_FastZ9Frac":
+        return _FastZ9Frac(self.num.conjugate(), self.denom_pow3)
+
+
+def _z9_to_fast(z: Z9) -> _FastZ9:
+    """Convert an ep_level.Z9 (Python int coefs) to _FastZ9 (mpz coefs)."""
+    c = z.coefs
+    return _FastZ9((_INT(c[0]), _INT(c[1]), _INT(c[2]),
+                    _INT(c[3]), _INT(c[4]), _INT(c[5])))
+
+
+def _z9frac_to_fast(zf: Z9Frac) -> _FastZ9Frac:
+    return _FastZ9Frac(_z9_to_fast(zf.num), zf.denom_pow3)
+
+
+def _fast_to_z9(z: _FastZ9) -> Z9:
+    """Convert a _FastZ9 back to ep_level.Z9 (Python int coefs) for
+    interoperability with the ep_level matmul / conjugate_transpose used
+    in the verification stage."""
+    c = z.coefs
+    return Z9((int(c[0]), int(c[1]), int(c[2]),
+               int(c[3]), int(c[4]), int(c[5])))
+
+
+def _fast_to_z9frac(zf: _FastZ9Frac) -> Z9Frac:
+    return Z9Frac(_fast_to_z9(zf.num), zf.denom_pow3)
+
+
+def _fast_matmul(A, B):
+    """Generic 3x3 (or n×m) matmul over _FastZ9Frac, using local
+    _FastZ9Frac.zero() so we never round-trip into ep_level.Z9Frac."""
+    n = len(A); m = len(B[0]); p = len(B)
+    out = [[_FastZ9Frac.zero() for _ in range(m)] for _ in range(n)]
+    for i in range(n):
+        for j in range(m):
+            s = _FastZ9Frac.zero()
+            for k in range(p):
+                aik = A[i][k]
+                if aik.num.is_zero():
+                    continue
+                s = s + aik * B[k][j]
+            out[i][j] = s
+    return out
+
+
+def _fast_conjugate_transpose(M):
+    n = len(M); m = len(M[0])
+    return [[M[j][i].conjugate() for j in range(n)] for i in range(m)]
+
+
 
 # ---------------------------------------------------------------------------
 # sde_chi (lifted from cyclotomic_int9.h sdeChi() and decompose_impl.h
@@ -149,13 +421,15 @@ def sde_chi_z9(coefs: tuple[int, ...]) -> int:
     return 6 + sde_chi_z9(_z9_div_by_int(coefs, 3))
 
 
-def sde_chi_full(zf: Z9Frac) -> int:
+def sde_chi_full(zf) -> int:
     """sde_chi_full: handles the Z[ξ, 1/3] case.  Mirrors decompose_impl.h
     sdeChiFull<T>():
       if zero: 0
       if f == 0: sdeChiZ9(numer)
       else:      6*f - sdeChiZ9(numer)
-    """
+
+    Accepts either ep_level.Z9Frac or _FastZ9Frac (duck-typed on .num /
+    .denom_pow3 / .is_zero())."""
     if zf.is_zero():
         return 0
     f = zf.denom_pow3
@@ -170,27 +444,27 @@ def sde_chi_full(zf: Z9Frac) -> int:
 # Gate matrices (matching decompose.cpp gateH/gateX/gateR/gateDcyclo)
 # ---------------------------------------------------------------------------
 
-def _zeta9_power(k: int) -> Z9Frac:
-    """zeta_9^k as Z9Frac (f=0).  For k in 0..5 this is a single basis
+def _zeta9_power(k: int) -> _FastZ9Frac:
+    """zeta_9^k as _FastZ9Frac (f=0).  For k in 0..5 this is a single basis
     element; for k in 6..8 use the standard reduction xi^{6+j} = -xi^j - xi^{3+j}."""
     k = ((k % 9) + 9) % 9
     if k < 6:
-        coefs = [0] * 6
-        coefs[k] = 1
-        return Z9Frac(Z9(tuple(coefs)), 0)
+        coefs = [_INT_ZERO] * 6
+        coefs[k] = _INT_ONE
+        return _FastZ9Frac(_FastZ9(tuple(coefs)), 0)
     j = k - 6
-    coefs = [0] * 6
-    coefs[j] = -1
-    coefs[j + 3] = -1
-    return Z9Frac(Z9(tuple(coefs)), 0)
+    coefs = [_INT_ZERO] * 6
+    coefs[j] = -_INT_ONE
+    coefs[j + 3] = -_INT_ONE
+    return _FastZ9Frac(_FastZ9(tuple(coefs)), 0)
 
 
-def _omega_power(k: int) -> Z9Frac:
+def _omega_power(k: int) -> _FastZ9Frac:
     """omega^k = zeta_9^{3k}."""
     return _zeta9_power(3 * k)
 
 
-def gate_H() -> list[list[Z9Frac]]:
+def gate_H() -> list[list[_FastZ9Frac]]:
     """H_{jk} = (1/(1+2*omega)) * omega^{jk}.
 
     Matches decompose.cpp's gateH(): the scalar is (-1 - 2*zeta_9^3)/3
@@ -200,19 +474,20 @@ def gate_H() -> list[list[Z9Frac]]:
       H[j][k] = ia * omega^{jk}
     """
     # numerator coefs: [-1, 0, 0, -2, 0, 0] / 3^1
-    ia = Z9Frac(Z9((-1, 0, 0, -2, 0, 0)), 1)
-    H: list[list[Z9Frac]] = [[Z9Frac.zero() for _ in range(3)] for _ in range(3)]
+    ia = _FastZ9Frac(_FastZ9((-_INT_ONE, _INT_ZERO, _INT_ZERO,
+                              -_INT(2), _INT_ZERO, _INT_ZERO)), 1)
+    H = [[_FastZ9Frac.zero() for _ in range(3)] for _ in range(3)]
     for j in range(3):
         for k in range(3):
             H[j][k] = ia * _omega_power(j * k)
     return H
 
 
-def gate_X() -> list[list[Z9Frac]]:
+def gate_X() -> list[list[_FastZ9Frac]]:
     """X = cyclic permutation |j> -> |j+1 mod 3>.
     Matches decompose.cpp: X[0][2]=X[1][0]=X[2][1]=1."""
-    one = Z9Frac.one()
-    zero = Z9Frac.zero()
+    one = _FastZ9Frac.one()
+    zero = _FastZ9Frac.zero()
     return [
         [zero, zero, one],
         [one,  zero, zero],
@@ -220,11 +495,11 @@ def gate_X() -> list[list[Z9Frac]]:
     ]
 
 
-def gate_R() -> list[list[Z9Frac]]:
+def gate_R() -> list[list[_FastZ9Frac]]:
     """R = Diag(1, 1, -1)."""
-    one = Z9Frac.one()
-    minus_one = Z9Frac(Z9.from_int(-1), 0)
-    zero = Z9Frac.zero()
+    one = _FastZ9Frac.one()
+    minus_one = _FastZ9Frac(_FastZ9.from_int(-1), 0)
+    zero = _FastZ9Frac.zero()
     return [
         [one,  zero, zero],
         [zero, one,  zero],
@@ -232,9 +507,9 @@ def gate_R() -> list[list[Z9Frac]]:
     ]
 
 
-def gate_Dcyclo(a: int, b: int, c: int) -> list[list[Z9Frac]]:
+def gate_Dcyclo(a: int, b: int, c: int) -> list[list[_FastZ9Frac]]:
     """Diag(xi^a, xi^b, xi^c) — full cyclotomic diagonal."""
-    zero = Z9Frac.zero()
+    zero = _FastZ9Frac.zero()
     return [
         [_zeta9_power(a), zero,            zero],
         [zero,            _zeta9_power(b), zero],
@@ -282,17 +557,16 @@ _PREFIX_TABLE_CACHE: list[PrefixEntry] | None = None
 
 
 def _build_prefix(a1: int, a2: int, a3: int, eps: int, delta: int,
-                  H: list[list[Z9Frac]], R: list[list[Z9Frac]],
-                  X: list[list[Z9Frac]]) -> list[list[Z9Frac]]:
+                  H, R, X):
     """H · D(a1,a2,a3) · R^eps · X^delta.  Matches decompose.cpp::buildPrefix."""
     P = gate_Dcyclo(a1, a2, a3)
     if eps == 1:
-        P = matmul(P, R)
+        P = _fast_matmul(P, R)
     if delta == 1:
-        P = matmul(P, X)
+        P = _fast_matmul(P, X)
     elif delta == 2:
-        P = matmul(matmul(P, X), X)
-    return matmul(H, P)
+        P = _fast_matmul(_fast_matmul(P, X), X)
+    return _fast_matmul(H, P)
 
 
 def get_prefix_table() -> list[PrefixEntry]:
@@ -322,22 +596,22 @@ def get_prefix_table() -> list[PrefixEntry]:
 # with small f (≤ 1 from the H factor), V is the arbitrary-precision input.
 # ---------------------------------------------------------------------------
 
-def _prefix_times_V_00(P: list[list[Z9Frac]], V: list[list[Z9Frac]]) -> Z9Frac:
+def _prefix_times_V_00(P, V):
     """Compute (P · V)[0][0] = sum_k P[0][k] * V[k][0]."""
-    acc = Z9Frac.zero()
+    acc = _FastZ9Frac.zero()
     for k in range(3):
-        if P[0][k].is_zero():
+        if P[0][k].num.is_zero():
             continue
         acc = acc + P[0][k] * V[k][0]
     return acc
 
 
-def _prefix_times_V(P: list[list[Z9Frac]], V: list[list[Z9Frac]]) -> list[list[Z9Frac]]:
+def _prefix_times_V(P, V):
     """Full P · V."""
-    return matmul(P, V)
+    return _fast_matmul(P, V)
 
 
-def _reduce_by_three(M: list[list[Z9Frac]]) -> list[list[Z9Frac]]:
+def _reduce_by_three(M):
     """If every entry's numerator coefs are divisible by 3, divide them out
     and decrement each entry's denom_pow3 by 1.  Repeat to a fixed point.
 
@@ -345,17 +619,27 @@ def _reduce_by_three(M: list[list[Z9Frac]]) -> list[list[Z9Frac]]:
     `P · V` adds 1 to f and bloats the numerator; after the cancel-by-3
     step the matrix shrinks back proportionally (and stays exactly equal
     to the input).
+
+    Vectorized inner: in one pass we (a) check every coef of every entry
+    against mod-3==0 with an early bail on the first non-divisible coef,
+    then (b) if all-divisible, build the divided-by-3 matrix in one go.
     """
-    # Find the maximum k such that 3^k divides every numerator coef.
     while True:
         all_div = True
+        # Single-pass divisibility check with early-exit (no list/tuple
+        # allocation per coef as the old `any(... for c in ...)` did).
         for i in range(3):
+            row = M[i]
             for j in range(3):
-                entry = M[i][j]
+                entry = row[j]
                 if entry.denom_pow3 == 0:
                     all_div = False
                     break
-                if any(c % 3 != 0 for c in entry.num.coefs):
+                c = entry.num.coefs
+                # all 6 coefs must be 0 mod 3
+                if (c[0] % _INT_THREE) or (c[1] % _INT_THREE) or \
+                   (c[2] % _INT_THREE) or (c[3] % _INT_THREE) or \
+                   (c[4] % _INT_THREE) or (c[5] % _INT_THREE):
                     all_div = False
                     break
             if not all_div:
@@ -367,8 +651,11 @@ def _reduce_by_three(M: list[list[Z9Frac]]) -> list[list[Z9Frac]]:
             row = []
             for j in range(3):
                 entry = M[i][j]
-                new_coefs = tuple(c // 3 for c in entry.num.coefs)
-                row.append(Z9Frac(Z9(new_coefs), entry.denom_pow3 - 1))
+                c = entry.num.coefs
+                new_coefs = (c[0] // _INT_THREE, c[1] // _INT_THREE,
+                             c[2] // _INT_THREE, c[3] // _INT_THREE,
+                             c[4] // _INT_THREE, c[5] // _INT_THREE)
+                row.append(_FastZ9Frac(_FastZ9(new_coefs), entry.denom_pow3 - 1))
             new_M.append(row)
         M = new_M
 
@@ -379,7 +666,7 @@ def _reduce_by_three(M: list[list[Z9Frac]]) -> list[list[Z9Frac]]:
 # successful peeling, where each entry is a power of zeta_9.)
 # ---------------------------------------------------------------------------
 
-def _unit_phase_mod3(x: Z9Frac) -> int:
+def _unit_phase_mod3(x) -> int:
     """If x is a unit ±zeta_9^j in Z[zeta_9] (with denom_pow3=0), return j%3.
     Otherwise return -1.  Mirrors decompose_impl.h's unitPhaseMod3."""
     if x.denom_pow3 != 0:
@@ -390,14 +677,15 @@ def _unit_phase_mod3(x: Z9Frac) -> int:
     for j in range(9):
         # zeta_9^{-j} = zeta_9^{9-j}; multiply numerator polynomial.
         z_inv = _zeta9_power(9 - j).num  # f=0 always
-        prod = numer * z_inv  # Z9 * Z9 -> Z9
+        prod = numer * z_inv  # _FastZ9 * _FastZ9 -> _FastZ9
+        pc = prod.coefs
         # Check if prod is ±1 (only coefs[0] = ±1, others 0).
-        if all(prod.coefs[k] == 0 for k in range(1, 6)) and prod.coefs[0] in (1, -1):
+        if not (pc[1] or pc[2] or pc[3] or pc[4] or pc[5]) and pc[0] in (1, -1):
             return j % 3
     return -1
 
 
-def classify_monomial_and_d_cost(M: list[list[Z9Frac]]):
+def classify_monomial_and_d_cost(M):
     """Return (is_monomial, d_count, r_count).  d_count includes r_count.
 
     Matches the heuristic in decompose_impl.h's countMonomialD lambda:
@@ -444,7 +732,7 @@ def classify_monomial_and_d_cost(M: list[list[Z9Frac]]):
 # Core peeling loop
 # ---------------------------------------------------------------------------
 
-def _try_single_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
+def _try_single_prefix(V, s: int, table: list[PrefixEntry],
                        greedy: bool = False, verbose: bool = False):
     """Find the lowest-D prefix P in `table` such that:
       strict (default): sde_chi_full((P·V)[0][0]) == s - 1
@@ -494,7 +782,7 @@ def _try_single_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
     return table[best_idx]
 
 
-def _try_double_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
+def _try_double_prefix(V, s: int, table: list[PrefixEntry],
                        verbose: bool = False):
     """Find two prefixes P2, P1 such that sde_chi((P2·P1·V)[0][0]) < s with
     minimum combined D-cost.  Matches decompose_impl.h's tryDoublePrefix.
@@ -527,11 +815,11 @@ def _try_double_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
         # Compute column 0 of midV = P1·V: midV[k][0] = sum_m P1[k][m]·V[m][0].
         # mid_col[0] is just mid00 (already computed).
         P1 = e1.P
-        mid_col = [mid00, Z9Frac.zero(), Z9Frac.zero()]
+        mid_col = [mid00, _FastZ9Frac.zero(), _FastZ9Frac.zero()]
         for k in (1, 2):
-            acc = Z9Frac.zero()
+            acc = _FastZ9Frac.zero()
             for m in range(3):
-                if not P1[k][m].is_zero():
+                if not P1[k][m].num.is_zero():
                     acc = acc + P1[k][m] * V[m][0]
             mid_col[k] = acc
         for idx2, e2 in enumerate(table):
@@ -539,9 +827,9 @@ def _try_double_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
                 continue
             P2 = e2.P
             # (P2 · midV)[0][0] = sum_k P2[0][k] · midV[k][0] = sum_k P2[0][k] · mid_col[k]
-            new00 = Z9Frac.zero()
+            new00 = _FastZ9Frac.zero()
             for k in range(3):
-                if not P2[0][k].is_zero():
+                if not P2[0][k].num.is_zero():
                     new00 = new00 + P2[0][k] * mid_col[k]
             new_s = sde_chi_full(new00)
             if new_s < s:
@@ -557,12 +845,17 @@ def _try_double_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
     return (table[best_idx1], table[best_idx2], best_mid_s, best_new_s)
 
 
-def decompose_canonical(V_input: list[list[Z9Frac]],
+def decompose_canonical(V_input,
                         max_iter: int | None = None,
                         verbose: bool = False,
                         greedy_single: bool = False,
                         skip_double: bool = False) -> dict:
     """Canonical-form syllable decomposition.
+
+    Accepts V_input as a 3x3 nested list of either ep_level.Z9Frac (the
+    legacy entry point, used by tests / sweep glue) or _FastZ9Frac (the
+    in-house mpz-backed type).  The hot loop runs on _FastZ9Frac; we
+    auto-convert if the caller passed Z9Frac.
 
     Returns dict with:
       success           — bool: did peeling reach sde_chi = 0?
@@ -576,9 +869,14 @@ def decompose_canonical(V_input: list[list[Z9Frac]],
     """
     table = get_prefix_table()
     if verbose:
-        print(f"[canonical_reducer] prefix table size: {len(table)}", file=sys.stderr)
+        print(f"[canonical_reducer] prefix table size: {len(table)} "
+              f"(gmpy2={_HAVE_GMPY2})", file=sys.stderr)
 
-    V = [row[:] for row in V_input]
+    # Promote ep_level.Z9Frac inputs into the local fast type if needed.
+    if V_input and not isinstance(V_input[0][0], _FastZ9Frac):
+        V = [[_z9frac_to_fast(V_input[i][j]) for j in range(3)] for i in range(3)]
+    else:
+        V = [row[:] for row in V_input]
     s_initial = sde_chi_full(V[0][0])
     if verbose:
         print(f"[canonical_reducer] initial sde_chi_full(V[0][0]) = {s_initial}",
@@ -741,28 +1039,28 @@ def decompose_canonical(V_input: list[list[Z9Frac]],
 # Verification: reconstruct V from syllables and compare to input.
 # ---------------------------------------------------------------------------
 
-def _gate_step_prefix(step: dict) -> list[list[Z9Frac]]:
+def _gate_step_prefix(step: dict):
     """Build the prefix matrix for a single GateStep:
-       (H if has_H) · D(a0,a1,a2) · R^eps · X^delta"""
+       (H if has_H) · D(a0,a1,a2) · R^eps · X^delta.
+    Returns a 3x3 nested list of _FastZ9Frac."""
     H = gate_H()
     R = gate_R()
     X = gate_X()
     P = gate_Dcyclo(step["a0"], step["a1"], step["a2"])
     if step.get("eps", 0) == 1:
-        P = matmul(P, R)
+        P = _fast_matmul(P, R)
     delta = step.get("delta", 0)
     if delta == 1:
-        P = matmul(P, X)
+        P = _fast_matmul(P, X)
     elif delta == 2:
-        P = matmul(matmul(P, X), X)
+        P = _fast_matmul(_fast_matmul(P, X), X)
     if step.get("has_H", True):
-        P = matmul(H, P)
+        P = _fast_matmul(H, P)
     return P
 
 
 def reconstruct_from_decomposition(syllables: list[dict],
-                                    trailing_clifford: list[list[Z9Frac]]
-                                    ) -> list[list[Z9Frac]]:
+                                    trailing_clifford):
     """Given the syllable list [s_1, ..., s_n] and the trailing clifford C,
     compute V = (P_1^{-1} P_2^{-1} ... P_n^{-1}) · C.
 
@@ -770,22 +1068,29 @@ def reconstruct_from_decomposition(syllables: list[dict],
 
     Sanity check: the peeling produced M_steps · V_input = C where
     M_steps = P_n · ... · P_1.  Hence V_input = M_steps† · C.
+
+    Runs in _FastZ9Frac (mpz) arithmetic throughout.
     """
+    # Promote trailing_clifford to fast type if caller handed us Z9Frac.
+    if trailing_clifford and not isinstance(trailing_clifford[0][0], _FastZ9Frac):
+        tc = [[_z9frac_to_fast(trailing_clifford[i][j]) for j in range(3)] for i in range(3)]
+    else:
+        tc = trailing_clifford
     # Compute M_steps = P_n · ... · P_1 (in the order steps were emitted,
     # left-multiplied onto the running product).
-    M_steps = [[Z9Frac.one() if i == j else Z9Frac.zero() for j in range(3)] for i in range(3)]
+    M_steps = [[_FastZ9Frac.one() if i == j else _FastZ9Frac.zero() for j in range(3)] for i in range(3)]
     for step in syllables:
         P = _gate_step_prefix(step)
-        M_steps = matmul(P, M_steps)
+        M_steps = _fast_matmul(P, M_steps)
     # V_input = M_steps† · C
-    M_dag = conjugate_transpose(M_steps)
-    V_reconstructed = matmul(M_dag, trailing_clifford)
+    M_dag = _fast_conjugate_transpose(M_steps)
+    V_reconstructed = _fast_matmul(M_dag, tc)
     return V_reconstructed
 
 
-def verify_decomposition(V_input: list[list[Z9Frac]],
+def verify_decomposition(V_input,
                          syllables: list[dict],
-                         trailing_clifford: list[list[Z9Frac]]) -> dict:
+                         trailing_clifford) -> dict:
     """Compare V_reconstructed against V_input exactly (no floating point).
 
     Returns dict with:
@@ -793,25 +1098,36 @@ def verify_decomposition(V_input: list[list[Z9Frac]],
       max_coef_residual  — int: max absolute coefficient in (V_recon - V_input)
                                 after aligning denom_pow3
       mismatch_entries   — list of (i,j) where they differ (capped at 5)
+
+    Both inputs may be Z9Frac- or _FastZ9Frac-typed; we promote to fast.
     """
     V_rec = reconstruct_from_decomposition(syllables, trailing_clifford)
+    # Promote V_input to fast type if needed.
+    if V_input and not isinstance(V_input[0][0], _FastZ9Frac):
+        V_in = [[_z9frac_to_fast(V_input[i][j]) for j in range(3)] for i in range(3)]
+    else:
+        V_in = V_input
 
     mismatches: list[tuple[int, int]] = []
-    max_resid = 0
+    max_resid = _INT_ZERO
     matches = True
     for i in range(3):
         for j in range(3):
-            a = V_input[i][j]
+            a = V_in[i][j]
             b = V_rec[i][j]
             # Align denoms to compare numerators directly.
             d = max(a.denom_pow3, b.denom_pow3)
-            a_num = a.num * Z9.from_int(3 ** (d - a.denom_pow3))
-            b_num = b.num * Z9.from_int(3 ** (d - b.denom_pow3))
+            a_num = a.num * (_INT_THREE ** (d - a.denom_pow3))
+            b_num = b.num * (_INT_THREE ** (d - b.denom_pow3))
             diff = a_num - b_num
+            zero_diff = True
             for c in diff.coefs:
-                if abs(int(c)) > max_resid:
-                    max_resid = abs(int(c))
-            if not all(c == 0 for c in diff.coefs):
+                ac = abs(c)
+                if ac > max_resid:
+                    max_resid = ac
+                if c:
+                    zero_diff = False
+            if not zero_diff:
                 matches = False
                 if len(mismatches) < 5:
                     mismatches.append((i, j))
@@ -826,9 +1142,13 @@ def verify_decomposition(V_input: list[list[Z9Frac]],
 # I/O: load V from .npz / .json, dump decomposition to .json
 # ---------------------------------------------------------------------------
 
-def load_input(path: Path) -> tuple[list[list[Z9Frac]], int]:
+def load_input(path: Path):
     """Load (V, f) from either .npz (V_blob int[3][3][6], f scalar) or
-    .json ({"f": int, "V": [[[6 ints]x3]x3]})."""
+    .json ({"f": int, "V": [[[6 ints]x3]x3]}).
+
+    Returns V as a 3x3 nested list of _FastZ9Frac (mpz-backed); the
+    decompose_canonical hot loop expects this type but will auto-convert
+    plain Z9Frac inputs for legacy callers (tests, sweep glue)."""
     p = Path(path)
     if p.suffix == ".npz":
         data = np.load(p, allow_pickle=False)
@@ -843,30 +1163,31 @@ def load_input(path: Path) -> tuple[list[list[Z9Frac]], int]:
         raise ValueError(f"unknown extension {p.suffix}; want .npz or .json")
     V_blob = np.asarray(V_blob)
     assert V_blob.shape == (3, 3, 6), f"V_blob shape {V_blob.shape} != (3,3,6)"
-    V: list[list[Z9Frac]] = []
+    V = []
     for i in range(3):
-        row: list[Z9Frac] = []
+        row = []
         for j in range(3):
-            coefs = tuple(int(V_blob[i, j, k]) for k in range(6))
-            row.append(Z9Frac(Z9(coefs), f))
+            coefs = tuple(_INT(int(V_blob[i, j, k])) for k in range(6))
+            row.append(_FastZ9Frac(_FastZ9(coefs), f))
         V.append(row)
     return V, f
 
 
-def _trailing_to_ints(M: list[list[Z9Frac]]) -> tuple[list[list[list[int]]], int]:
-    """Serialize a RingMat to (3x3 list of 6-int lists, shared f)."""
+def _trailing_to_ints(M) -> tuple[list[list[list[int]]], int]:
+    """Serialize a RingMat (3x3 list of _FastZ9Frac or Z9Frac entries) to
+    (3x3 list of 6-int lists, shared f) for JSON output."""
     f_shared = max(M[i][j].denom_pow3 for i in range(3) for j in range(3))
     out: list[list[list[int]]] = []
     for i in range(3):
         row: list[list[int]] = []
         for j in range(3):
             entry = M[i][j]
-            scale = 3 ** (f_shared - entry.denom_pow3)
-            if scale != 1:
-                scaled = entry.num * Z9.from_int(scale)
+            scale = _INT_THREE ** (f_shared - entry.denom_pow3) if (f_shared - entry.denom_pow3) > 0 else _INT_ONE
+            if scale != _INT_ONE:
+                scaled_coefs = tuple(c * scale for c in entry.num.coefs)
             else:
-                scaled = entry.num
-            row.append([int(c) for c in scaled.coefs])
+                scaled_coefs = entry.num.coefs
+            row.append([int(c) for c in scaled_coefs])
         out.append(row)
     return out, f_shared
 
