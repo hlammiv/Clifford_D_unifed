@@ -13,9 +13,11 @@ Implemented so far:
 from cvp.gram import B, B_LLL_CACHE, U_lll, B_lll, lll_reduce, q_form
 from cvp.babai import babai_x1, minkowski_embedding
 from cvp.diophantine import (
+    bb_to_real_coeffs,
     enumerate_x3,
     solve_q_norm,
     solve_x2_x3,
+    solve_x2_x3_ring_unitary,
     verify_pair,
     householder_frobenius,
 )
@@ -37,9 +39,11 @@ __all__ = [
     "babai_x1",
     "minkowski_embedding",
     # Phase 3
+    "bb_to_real_coeffs",
     "enumerate_x3",
     "solve_q_norm",
     "solve_x2_x3",
+    "solve_x2_x3_ring_unitary",
     "verify_pair",
     "householder_frobenius",
     # Phase 4
