@@ -463,7 +463,8 @@ def _reify_factors(factors: list,
                    db: RzLookupDB,
                    cliffords: np.ndarray,
                    allow_live_fallback: bool,
-                   timeout: int) -> dict:
+                   timeout: int,
+                   tightness_first: bool = False) -> dict:
     """Walk an Euler factor list and produce the (V_total, N_D_sum, n_leaves) tuple.
 
     Returns dict ``{V_total (or None on full failure), N_D_sum, n_leaves,
@@ -511,7 +512,8 @@ def _reify_factors(factors: list,
             # We need a sub-call that distinguishes DB-hit vs DB-miss-but-live-recovered
             # vs total-failure.  Do the DB lookup inline so we can update counters.
             theta_canonical, k_cliff, daggered = _theta_canonical(theta)
-            res = db.lookup(theta_canonical, eps_leaf)
+            res = db.lookup(theta_canonical, eps_leaf,
+                            tightness_first=tightness_first)
             if res is not None:
                 V = _v_blob_to_complex(res["V"], res["v_f"])
                 if daggered:

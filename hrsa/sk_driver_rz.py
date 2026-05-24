@@ -53,14 +53,19 @@ def R_z_target(theta: float) -> np.ndarray:
     ]).astype(np.complex128)
 
 
-def _rz_db_lookup_with_fold(theta: float, eps: float, db: RzLookupDB):
+def _rz_db_lookup_with_fold(theta: float, eps: float, db: RzLookupDB,
+                            tightness_first: bool = True):
     """R_z DB lookup with Clifford 6-fold + negation fold.
+
+    SK callers default to tightness_first=True (route 1: rank by smallest
+    budget rather than smallest N_D — picks the tightest cell, which is
+    what SK recursion needs for sub-ε^{3/2} contraction).
 
     Returns dict {V (3,3 complex), N_D, achieved_frob, theta_canonical,
     k_cliff, daggered} or None on miss.
     """
     theta_can, k_cliff, daggered = _theta_canonical(theta)
-    res = db.lookup(theta_can, eps)
+    res = db.lookup(theta_can, eps, tightness_first=tightness_first)
     if res is None:
         return None
     V = _v_blob_to_complex(res["V"], res["v_f"])
@@ -112,6 +117,7 @@ def _approximate_via_euler(U_target: np.ndarray, eps_u: float,
         cliffords=cliffords,
         allow_live_fallback=False,
         timeout=60,
+        tightness_first=True,  # SK route 1: pick tightest cell, not cheapest
     )
     V = m.get("V_total")
     return {

@@ -203,14 +203,21 @@ class RzLookupDB:
             cache.setdefault(float(eps), []).append(float(theta))
         return cache
 
-    def lookup(self, theta: float, eps_max: float) -> dict | None:
+    def lookup(self, theta: float, eps_max: float,
+               tightness_first: bool = False) -> dict | None:
         """Return the best stored entry usable as an R_z(theta) approx within eps_max.
 
         For each eps_target tier <= eps_max, finds the stored theta* closest to
         the target; checks that
             |theta - theta*| * THETA_TO_FROB + achieved_frob <= eps_max
-        and selects the candidate with smallest N_D (None treated as +inf),
-        then smallest budget, then smallest achieved_frob.
+
+        Ranking:
+        - tightness_first=False (default): min N_D, then smallest budget,
+          then smallest achieved_frob. Best for paper-data / minimum-cost
+          synthesis where any valid cell counts equally.
+        - tightness_first=True: min budget (≈ tightest actual approximation),
+          then min achieved_frob, then min N_D. Best for SK recursion where
+          the Euler approximation precision dominates contraction quality.
 
         Returns dict with keys: theta, eps_target, achieved_frob, N_D, V,
             v_f, method, source, budget. Returns None if no entry fits.
@@ -222,11 +229,6 @@ class RzLookupDB:
         for eps_t, thetas in self._eps_theta_cache.items():
             if eps_t > eps_max + 1e-15:
                 continue
-            # Find nearest stored theta via bisect; consider both neighbors.
-            # We do NOT pre-reject by eps_max - eps_t here: the stored
-            # achieved_frob is often much tighter than eps_target, so a θ*
-            # at distance > (eps_max - eps_t)/THETA_TO_FROB can still pass
-            # the real budget check below.
             idx = bisect_left(thetas, theta)
             for cand_idx in (idx - 1, idx):
                 if 0 <= cand_idx < len(thetas):
@@ -237,8 +239,7 @@ class RzLookupDB:
         if not candidates:
             return None
 
-        # Fetch full rows for surviving (eps_target, theta) pairs and check budget.
-        best = None  # (N_D_key, budget, achieved_frob, row)
+        best = None
         for eps_t, theta_star, d_theta in candidates:
             row = self.conn.execute(
                 "SELECT * FROM rz_entries WHERE eps_target=? AND theta=?",
@@ -251,7 +252,14 @@ class RzLookupDB:
                 continue
             n_d = row["N_D"]
             n_d_key = float("inf") if n_d is None else int(n_d)
-            key = (n_d_key, budget, float(row["achieved_frob"]))
+            if tightness_first:
+                # Tighten first: pick the cell with smallest budget (= tightest
+                # actual approximation accounting for θ-interpolation distance).
+                # Tie-break by achieved_frob then N_D.
+                key = (budget, float(row["achieved_frob"]), n_d_key)
+            else:
+                # Cheap first: min N_D, then budget, then achieved_frob.
+                key = (n_d_key, budget, float(row["achieved_frob"]))
             if best is None or key < best[0]:
                 best = (key, row, budget)
 
