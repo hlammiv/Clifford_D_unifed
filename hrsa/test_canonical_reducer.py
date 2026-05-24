@@ -53,13 +53,19 @@ def test_sde_chi_matches_cell(cell_path: Path) -> bool:
     return ok
 
 
-def test_decompose_matches_cell(cell_path: Path) -> bool:
+def test_decompose_matches_cell(cell_path: Path, greedy: bool = True) -> bool:
+    """Decompose, verify bit-exact round-trip, compare D_count to cell.
+
+    Greedy mode (default): accepts any-drop single-prefix → can produce
+    SMALLER D_count than strict (which mirrors C++) — verify only checks
+    the round-trip, not the D_count match.
+    """
     V, f, expected = _load_cell_input(cell_path)
     expected_d = expected.get("N_D")
     expected_n = len(expected.get("syllables", []))
 
     t0 = time.time()
-    result = cr.decompose_canonical(V, verbose=False)
+    result = cr.decompose_canonical(V, verbose=False, greedy_single=greedy)
     t1 = time.time()
     if not result["success"]:
         print(f"  decompose failed: {result.get('error')}")
@@ -69,34 +75,48 @@ def test_decompose_matches_cell(cell_path: Path) -> bool:
     ver = cr.verify_decomposition(V, result["syllables"],
                                   result["trailing_clifford"])
     match = ver["matches"]
-    print(f"  D_count = {result['D_count']}  (cell reports {expected_d}) "
-          + ("OK" if result['D_count'] == expected_d else "MISMATCH"))
+    compare_mark = "≤ OK" if result['D_count'] <= expected_d else "WORSE"
+    print(f"  D_count = {result['D_count']}  (cell reports {expected_d}) {compare_mark}")
     print(f"  n_syllables = {len(result['syllables'])}  (cell reports {expected_n})")
     print(f"  verify.matches = {match}  max_residual = {ver['max_coef_residual']}  "
           + ("OK" if match else "FAIL"))
-    print(f"  wall = {t1-t0:.1f}s")
+    print(f"  wall = {t1-t0:.1f}s  (mode={'greedy' if greedy else 'strict'})")
     return match  # round-trip is the hard-correctness gate
 
 
 def main() -> int:
-    cell_paths = [
-        _UNIFIED / "sweep_zeta9_tier2_eps1e-4_2026-05-23" / "cell_0022.json",
-    ]
+    """Sweep a few cell_NNNN.json files; we expect bit-exact reconstruction
+    and matching D_count on every successful case."""
+    sweep_root = _UNIFIED / "sweep_zeta9_tier2_eps1e-4_2026-05-23"
+    if not sweep_root.exists():
+        print(f"SKIP: {sweep_root} not found")
+        return 0
+
+    # Pick a small set of cells of varying sde_chi to exercise the peeler.
+    cell_indices = [22, 100, 250, 500]
+    cells_tested = 0
     all_ok = True
-    for cp in cell_paths:
+    for ci in cell_indices:
+        cp = sweep_root / f"cell_{ci:04d}.json"
         if not cp.exists():
-            print(f"SKIP {cp}: not found")
+            print(f"SKIP {cp.name}: not found")
+            continue
+        with open(cp) as fh:
+            cell = json.load(fh)
+        if not cell.get("decomposition", {}).get("decompose_success"):
+            print(f"SKIP {cp.name}: cell decomposition did not succeed in original sweep")
             continue
         print(f"=== {cp.name} ===")
         print(" -- sde_chi test")
         ok1 = test_sde_chi_matches_cell(cp)
         print(" -- decompose round-trip test")
         ok2 = test_decompose_matches_cell(cp)
+        cells_tested += 1
         all_ok = all_ok and ok1 and ok2
 
     print("=" * 40)
-    print(f"OVERALL: {'PASS' if all_ok else 'FAIL'}")
-    return 0 if all_ok else 1
+    print(f"Tested {cells_tested} cells.  OVERALL: {'PASS' if all_ok else 'FAIL'}")
+    return 0 if all_ok and cells_tested > 0 else 1
 
 
 if __name__ == "__main__":

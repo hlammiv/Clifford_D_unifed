@@ -445,26 +445,50 @@ def classify_monomial_and_d_cost(M: list[list[Z9Frac]]):
 # ---------------------------------------------------------------------------
 
 def _try_single_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
-                       verbose: bool = False):
-    """Find the lowest-D prefix P in `table` such that sde_chi_full((P·V)[0][0])
-    == s - 1.  Returns the winning PrefixEntry, or None.
+                       greedy: bool = False, verbose: bool = False):
+    """Find the lowest-D prefix P in `table` such that:
+      strict (default): sde_chi_full((P·V)[0][0]) == s - 1
+      greedy:           sde_chi_full((P·V)[0][0])  < s  (any drop)
 
-    Iterates ALL 4374 entries (cheap: each iteration is one ringZ9chi multiply
-    + one sde_chi_full).  The C++ uses early-exit (e.d >= best_d) to prune;
-    we replicate that.
+    Returns the winning PrefixEntry, or None.
+
+    Strict mode mirrors decompose.cpp's trySinglePrefix exactly.  Greedy
+    mode trades the Kalra-staircase invariant for raw progress: when no
+    drop-by-1 prefix exists but a drop-by-3 prefix does (common at high f),
+    accepting it bypasses the expensive O(N²) double-prefix search.
+
+    Empirically at SK depth=2 (f=4052) greedy is the only practical option;
+    at SK depth=0 (HRSA cells) strict matches the C++ algorithm exactly.
     """
     best_d = float("inf")
     best_idx = -1
+    if greedy:
+        # Tie-break by max drop among ties on D-cost (deeper drops are
+        # strictly better — they let f shrink faster and the next inner
+        # iteration is cheaper).
+        best_drop = 0
     for idx, e in enumerate(table):
-        if e.d >= best_d:
+        if e.d > best_d:
             continue
         new00 = _prefix_times_V_00(e.P, V)
-        if sde_chi_full(new00) == s - 1:
-            best_d = e.d
-            best_idx = idx
-            if best_d == 0:
-                # Best possible; no further improvement.
-                break
+        new_s = sde_chi_full(new00)
+        if greedy:
+            if new_s >= s:
+                continue
+            drop = s - new_s
+            if e.d < best_d or (e.d == best_d and drop > best_drop):
+                best_d = e.d
+                best_drop = drop
+                best_idx = idx
+                if best_d == 0 and best_drop >= 6:
+                    break  # cheap, deep — almost certainly optimal
+        else:
+            if new_s == s - 1:
+                if e.d < best_d:
+                    best_d = e.d
+                    best_idx = idx
+                    if best_d == 0:
+                        break
     if best_idx < 0:
         return None
     return table[best_idx]
@@ -535,7 +559,9 @@ def _try_double_prefix(V: list[list[Z9Frac]], s: int, table: list[PrefixEntry],
 
 def decompose_canonical(V_input: list[list[Z9Frac]],
                         max_iter: int | None = None,
-                        verbose: bool = False) -> dict:
+                        verbose: bool = False,
+                        greedy_single: bool = False,
+                        skip_double: bool = False) -> dict:
     """Canonical-form syllable decomposition.
 
     Returns dict with:
@@ -584,7 +610,12 @@ def decompose_canonical(V_input: list[list[Z9Frac]],
     n_double = 0
     while s > 0 and n_iter < max_iter:
         n_iter += 1
-        winner = _try_single_prefix(V, s, table, verbose=verbose)
+        # First try strict single-prefix (sde drop by exactly 1, matches C++).
+        winner = _try_single_prefix(V, s, table, greedy=False, verbose=verbose)
+        if winner is None and greedy_single:
+            # Greedy fallback: accept ANY drop (typically drop=3 when no drop=1
+            # exists; common at high f where strict-1 wouldn't find anything).
+            winner = _try_single_prefix(V, s, table, greedy=True, verbose=verbose)
         if winner is not None:
             # Apply: V := winner.P · V; then reduce-by-3 to keep ints bounded.
             V = _prefix_times_V(winner.P, V)
@@ -603,6 +634,17 @@ def decompose_canonical(V_input: list[list[Z9Frac]],
             s = new_s
             continue
 
+        # Single-prefix failed (strict + greedy if enabled).
+        if skip_double:
+            peel_seconds = time.time() - peel_start
+            return {
+                "success": False, "D_count": -1,
+                "sde_chi_initial": s_initial, "sde_chi_final": s,
+                "syllables": syllables, "trailing_clifford": V,
+                "n_iter": n_iter, "peel_seconds": peel_seconds,
+                "error": f"single-prefix failed at sde_chi={s}; "
+                         f"double-prefix skipped (--skip-double)",
+            }
         # Single-prefix failed: try double-prefix (Kalra obstruction fallback).
         if verbose:
             print(f"[canonical_reducer] iter {n_iter}: single-prefix failed at "
@@ -868,6 +910,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--verbose", "-v", action="store_true")
     p.add_argument("--no-verify", action="store_true",
                    help="Skip verification step (saves a chain of matmuls).")
+    p.add_argument("--greedy", action="store_true",
+                   help="When no strict drop-by-1 single-prefix exists, "
+                        "fall back to greedy (any drop > 0) BEFORE the "
+                        "expensive O(N^2) double-prefix search.  Critical "
+                        "for high-f inputs (e.g. SK output at f≈4052) "
+                        "where double-prefix at that scale is infeasible.")
+    p.add_argument("--skip-double", action="store_true",
+                   help="Don't fall back to double-prefix search.  Combine "
+                        "with --greedy for fast-but-may-be-incomplete runs.")
     args = p.parse_args(argv)
 
     if args.verbose:
@@ -886,7 +937,9 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
 
     t0 = time.time()
-    result = decompose_canonical(V, max_iter=args.max_iter, verbose=args.verbose)
+    result = decompose_canonical(V, max_iter=args.max_iter, verbose=args.verbose,
+                                 greedy_single=args.greedy,
+                                 skip_double=args.skip_double)
     t1 = time.time()
     if args.verbose:
         print(f"[canonical_reducer] decompose_canonical: success={result['success']} "
