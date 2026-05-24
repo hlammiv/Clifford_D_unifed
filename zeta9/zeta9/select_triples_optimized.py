@@ -426,6 +426,18 @@ def _unique_sorted_rows(arr: np.ndarray) -> np.ndarray:
 _PARALLEL_KERNEL_THRESHOLD = 100_000
 
 
+# ============================================================
+# K'-cap stage-2 LOSSY prune (2026-05-24, feature branch only)
+# ============================================================
+# σ_1 ring embedding constants. σ_1(Y) = Y[0] + α₁·Y[1] + α₁²·Y[2] where
+# α₁ = 2·cos(2π/9) is the σ_1 image of ζ_9 + ζ_9⁻¹ under the totally-real
+# subfield Q(ζ_9 + ζ_9⁻¹) ⊂ Q(ζ_9). Used as the quality metric for K'-cap:
+# rank Y_a candidates by |σ_1(Y_a)| (smaller = closer to the small-slot
+# target band center of 0). Hardcoded to avoid math.cos at module load.
+_SIGMA1_ALPHA1 = 1.5320888862379560      # 2 * cos(2π/9)
+_SIGMA1_ALPHA1_SQ = _SIGMA1_ALPHA1 * _SIGMA1_ALPHA1   # ≈ 2.34729...
+
+
 if _HAVE_NUMBA:
     @nb.njit(cache=True, boundscheck=False)
     def _process_ac_pair_nb_serial(b_keys: np.ndarray,
@@ -583,6 +595,146 @@ if _HAVE_NUMBA:
                     out[k, cb] = nb0; out[k, cb + 1] = nb1; out[k, cb + 2] = nb2
                     out[k, cc] = c0; out[k, cc + 1] = c1; out[k, cc + 2] = c2
                     k += 1
+        return out
+
+
+    @nb.njit(cache=True, boundscheck=False, fastmath=True)
+    def _sigma1_dev_nb(y0: int, y1: int, y2: int,
+                       alpha1: float, alpha1_sq: float,
+                       sigma1_target: float) -> float:
+        """|sigma_1(Y) - sigma1_target|. For the small slot, sigma1_target = 0;
+        for a unit slot in householder mode, sigma1_target ≈ 3^{2f}."""
+        v = float(y0) + alpha1 * float(y1) + alpha1_sq * float(y2) - sigma1_target
+        return v if v >= 0.0 else -v
+
+    @nb.njit(cache=True, boundscheck=False)
+    def _process_ac_pair_kprime_nb(b_keys: np.ndarray,
+                                    a_rows: np.ndarray,
+                                    c_rows: np.ndarray,
+                                    target_sum: np.ndarray,
+                                    bias: int, sh0: int, sh1: int,
+                                    col_a: int, col_b: int, col_c: int,
+                                    kprime: int,
+                                    alpha1: float, alpha1_sq: float,
+                                    sigma1_target_a: float) -> np.ndarray:
+        """K'-cap variant of the serial AC-pair kernel.
+
+        Same join as ``_process_ac_pair_nb_serial`` but emits at most ``kprime``
+        triples per (a_group, c_bucket) call, keeping the ones whose Y_a has
+        the SMALLEST |σ_1(Y_a) - sigma1_target_a| (closest to the per-slot σ_1
+        target band center). The caller is responsible for setting
+        ``sigma1_target_a`` to the σ_1 image of Y_a's expected slot value
+        (typically 0 for the small slot u=0, or ≈ 3^{2f} for a u=1 slot).
+
+        Implementation: max-heap of size kprime, keyed on |σ_1(Y_a) - target|.
+        New hits replace the current worst when their σ_1-deviation is smaller.
+        Heap is a flat int64 buffer carrying (a0,a1,a2, nb0,nb1,nb2, c0,c1,c2)
+        per slot plus a parallel float64 array of σ_1-deviation keys.
+
+        Lossy: at most ``kprime`` triples emitted; the Y_a with the smallest
+        |σ_1 deviation| within this (a_group, c_bucket) is provably preserved
+        (top-1 invariant of the max-heap evict-worst policy).
+        """
+        na = a_rows.shape[0]
+        nc = c_rows.shape[0]
+        nbk = b_keys.shape[0]
+        ts0 = target_sum[0]
+        ts1 = target_sum[1]
+        ts2 = target_sum[2]
+
+        # Heap state. Use plain arrays + manual sift to avoid heapq.
+        # keys[i] = |σ_1(Y_a_i)|; rows[i, 0..8] = (a, nb, c) in original-coord
+        #   layout for the join output (we apply col_{a,b,c} on emit).
+        cap = int(kprime)
+        if cap <= 0:
+            # Degenerate: behave as the regular serial kernel.
+            return _process_ac_pair_nb_serial(b_keys, a_rows, c_rows, target_sum,
+                                              bias, sh0, sh1, col_a, col_b, col_c)
+        heap_keys = np.empty(cap, dtype=np.float64)
+        heap_rows = np.empty((cap, 9), dtype=np.int64)
+        heap_size = 0
+
+        ca = col_a * 3
+        cb = col_b * 3
+        cc = col_c * 3
+
+        for ia in range(na):
+            a0 = a_rows[ia, 0]
+            a1 = a_rows[ia, 1]
+            a2 = a_rows[ia, 2]
+            # σ_1(Y_a) is constant over the inner c-loop. Compute once.
+            key = _sigma1_dev_nb(a0, a1, a2, alpha1, alpha1_sq, sigma1_target_a)
+            for ic in range(nc):
+                c0 = c_rows[ic, 0]
+                c1 = c_rows[ic, 1]
+                c2 = c_rows[ic, 2]
+                nb0 = ts0 - a0 - c0
+                nb1 = ts1 - a1 - c1
+                nb2 = ts2 - a2 - c2
+                qk = ((nb0 + bias) << sh0) | ((nb1 + bias) << sh1) | (nb2 + bias)
+                lo = 0
+                hi = nbk
+                while lo < hi:
+                    mid = (lo + hi) >> 1
+                    if b_keys[mid] < qk:
+                        lo = mid + 1
+                    else:
+                        hi = mid
+                if lo >= nbk or b_keys[lo] != qk:
+                    continue
+                # Have a hit. Insert into the bounded max-heap.
+                if heap_size < cap:
+                    # Append + sift up.
+                    i = heap_size
+                    heap_keys[i] = key
+                    heap_rows[i, ca] = a0; heap_rows[i, ca + 1] = a1; heap_rows[i, ca + 2] = a2
+                    heap_rows[i, cb] = nb0; heap_rows[i, cb + 1] = nb1; heap_rows[i, cb + 2] = nb2
+                    heap_rows[i, cc] = c0; heap_rows[i, cc + 1] = c1; heap_rows[i, cc + 2] = c2
+                    heap_size += 1
+                    # Sift up (max-heap: parent should be >= child)
+                    while i > 0:
+                        parent = (i - 1) >> 1
+                        if heap_keys[parent] < heap_keys[i]:
+                            # swap
+                            tk = heap_keys[parent]; heap_keys[parent] = heap_keys[i]; heap_keys[i] = tk
+                            for jj in range(9):
+                                tr = heap_rows[parent, jj]
+                                heap_rows[parent, jj] = heap_rows[i, jj]
+                                heap_rows[i, jj] = tr
+                            i = parent
+                        else:
+                            break
+                else:
+                    # Heap full. Only insert if smaller than current worst (root).
+                    if key >= heap_keys[0]:
+                        continue
+                    heap_keys[0] = key
+                    heap_rows[0, ca] = a0; heap_rows[0, ca + 1] = a1; heap_rows[0, ca + 2] = a2
+                    heap_rows[0, cb] = nb0; heap_rows[0, cb + 1] = nb1; heap_rows[0, cb + 2] = nb2
+                    heap_rows[0, cc] = c0; heap_rows[0, cc + 1] = c1; heap_rows[0, cc + 2] = c2
+                    # Sift down.
+                    i = 0
+                    while True:
+                        l = 2 * i + 1
+                        r = 2 * i + 2
+                        largest = i
+                        if l < cap and heap_keys[l] > heap_keys[largest]:
+                            largest = l
+                        if r < cap and heap_keys[r] > heap_keys[largest]:
+                            largest = r
+                        if largest == i:
+                            break
+                        tk = heap_keys[i]; heap_keys[i] = heap_keys[largest]; heap_keys[largest] = tk
+                        for jj in range(9):
+                            tr = heap_rows[i, jj]
+                            heap_rows[i, jj] = heap_rows[largest, jj]
+                            heap_rows[largest, jj] = tr
+                        i = largest
+
+        out = np.empty((heap_size, 9), dtype=np.int64)
+        for i in range(heap_size):
+            for jj in range(9):
+                out[i, jj] = heap_rows[i, jj]
         return out
 
 
@@ -828,6 +980,8 @@ def _process_b_bucket(
     progress_interval_sec: float = 10.0,
     progress_prefix: str = "",
     show_progress: bool = False,
+    kprime_cap: int = 0,
+    sigma1_target_a: float = 0.0,
 ):
     if b_rows.size == 0:
         return 0
@@ -869,11 +1023,25 @@ def _process_b_bucket(
             # Numba does the full A × C inner double loop in-kernel.
             # Dispatch: parallel kernel only when work is large enough to
             # amortize prange thread-spawn overhead (~ms per call).
+            # K'-cap (2026-05-24, LOSSY): when kprime_cap > 0, dispatch to the
+            # bounded-heap kernel that emits at most kprime_cap triples per
+            # (a_group, c_bucket) call, keeping those whose Y_a has smallest
+            # |σ_1(Y_a)|. Top-1 invariant is preserved.
             ar = np.ascontiguousarray(a_rows, dtype=np.int64)
             cr = np.ascontiguousarray(c_rows, dtype=np.int64)
             ts = np.ascontiguousarray(target_sum, dtype=np.int64)
             work = int(ar.shape[0]) * int(cr.shape[0])
-            if work >= _PARALLEL_KERNEL_THRESHOLD:
+            if kprime_cap > 0:
+                out_part = _process_ac_pair_kprime_nb(b_keys, ar, cr, ts,
+                                                      np.int64(_PACK_BIAS),
+                                                      np.int64(_PACK_SH0),
+                                                      np.int64(_PACK_SH1),
+                                                      col_a, col_b, col_c,
+                                                      np.int64(kprime_cap),
+                                                      _SIGMA1_ALPHA1,
+                                                      _SIGMA1_ALPHA1_SQ,
+                                                      float(sigma1_target_a))
+            elif work >= _PARALLEL_KERNEL_THRESHOLD:
                 out_part = _process_ac_pair_nb_parallel(b_keys, ar, cr, ts,
                                                         np.int64(_PACK_BIAS),
                                                         np.int64(_PACK_SH0),
@@ -904,6 +1072,11 @@ def _process_b_bucket(
             continue
 
         # Pure-Python fallback (no Numba). Original behaviour preserved.
+        # K'-cap path collects all hits for this (a_group, c_bucket) call into
+        # a list and post-trims by |σ_1(Y_a)|. Simpler than a per-call heap and
+        # K'-cap is meant for f≥4 production builds where Numba is always on;
+        # this fallback exists only for dev-laptop sanity tests.
+        per_call_hits = [] if kprime_cap > 0 else None
         for ia in range(a_rows.shape[0]):
             a = a_rows[ia]
             for i0 in range(0, c_rows.shape[0], query_chunk_rows):
@@ -917,14 +1090,17 @@ def _process_b_bucket(
                 b_hit = need_b[mask]
                 a_hit = np.repeat(a.reshape(1, 3), c_hit.shape[0], axis=0)
                 out_part = _reconstruct_original_rows(a_hit, b_hit, c_hit, order)
-                out_buf.append(out_part)
-                out_rows += int(out_part.shape[0])
-                if out_rows >= flush_rows:
-                    arr = np.concatenate(out_buf, axis=0)
-                    _append_rows_raw(rank_output_path, arr)
-                    total_written += int(arr.shape[0])
-                    out_buf = []
-                    out_rows = 0
+                if kprime_cap > 0:
+                    per_call_hits.append(out_part)
+                else:
+                    out_buf.append(out_part)
+                    out_rows += int(out_part.shape[0])
+                    if out_rows >= flush_rows:
+                        arr = np.concatenate(out_buf, axis=0)
+                        _append_rows_raw(rank_output_path, arr)
+                        total_written += int(arr.shape[0])
+                        out_buf = []
+                        out_rows = 0
 
             a_done += 1
             if show_progress:
@@ -933,6 +1109,29 @@ def _process_b_bucket(
                     last_progress_time = now
                     pct = 100.0 * float(a_done) / float(total_a) if total_a > 0 else 100.0
                     print(f"{progress_prefix}{a_done}/{total_a} A rows ({pct:.1f}%), local_matches_written={total_written + out_rows}, current_C_bucket={rc+1}/{n_buckets}")
+
+        # K'-cap post-trim for the Python-fallback path: at end of this
+        # (a_group, c_bucket) call, keep the top kprime_cap by |σ_1(Y_a) - target|.
+        if kprime_cap > 0 and per_call_hits is not None and per_call_hits:
+            arr = np.concatenate(per_call_hits, axis=0)
+            ca = int(order[0]) * 3
+            ya0 = arr[:, ca].astype(np.float64)
+            ya1 = arr[:, ca + 1].astype(np.float64)
+            ya2 = arr[:, ca + 2].astype(np.float64)
+            keys = np.abs(ya0 + _SIGMA1_ALPHA1 * ya1 + _SIGMA1_ALPHA1_SQ * ya2 - float(sigma1_target_a))
+            if arr.shape[0] > kprime_cap:
+                # argpartition picks indices of the kprime_cap smallest keys.
+                idx = np.argpartition(keys, kprime_cap - 1)[:kprime_cap]
+                arr = arr[idx]
+            out_buf.append(arr)
+            out_rows += int(arr.shape[0])
+            if out_rows >= flush_rows:
+                flush_arr = np.concatenate(out_buf, axis=0)
+                _append_rows_raw(rank_output_path, flush_arr)
+                total_written += int(flush_arr.shape[0])
+                out_buf = []
+                out_rows = 0
+            per_call_hits = []
 
     if out_buf:
         arr = np.concatenate(out_buf, axis=0)
@@ -968,6 +1167,8 @@ def select_triples_mpi(
     resume: bool = False,
     verbose: bool = True,
     drop_col_c: bool = False,
+    kprime_cap: int = 0,
+    kprime_u_a_sq: float = 0.0,
 ):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -981,6 +1182,14 @@ def select_triples_mpi(
 
     total_scale_int = int(round(norm * (3 ** (2 * f))))
     target_sum = np.array([total_scale_int, 0, 0], dtype=ROW_DTYPE)
+    # σ_1 band-center target for Y_a, used only by the K'-cap kernel. Each Y
+    # is the integer numerator of |a|² (with a in the cyclotomic ring at denom
+    # 3^f), so σ_1(Y) ≈ |u_target|² · 3^{2f} for a near the target. For Y_a
+    # representing a slot with target magnitude² = kprime_u_a_sq, the band
+    # center is kprime_u_a_sq · 3^{2f}. Default kprime_u_a_sq=0 fits the small
+    # slot (u≈0), which is the typical A choice in the wrapper (smallest
+    # input set after sort).
+    sigma1_target_a_val = float(kprime_u_a_sq) * float(3 ** (2 * f))
 
     if rank == 0:
         in1 = _resolve_input_specs(inputs1)
@@ -1027,6 +1236,9 @@ def select_triples_mpi(
                 "B_rows_done": 0,
                 "C_rows_done": 0,
                 "rows_written": 0,
+                "kprime_cap": int(kprime_cap),
+                "kprime_u_a_sq": float(kprime_u_a_sq),
+                "kprime_sigma1_target_a": float(sigma1_target_a_val),
             }
             _write_manifest(manifest_path, manifest)
             _save_completed_bitmap(manifest_path, bytearray((int(n_join_buckets) + 7) // 8))
@@ -1150,6 +1362,8 @@ def select_triples_mpi(
                 progress_interval_sec=10.0,
                 progress_prefix=f"bucket {my_bid+1}/{n_buckets}: ",
                 show_progress=bool(verbose and rank == 0),
+                kprime_cap=int(kprime_cap),
+                sigma1_target_a=sigma1_target_a_val,
             )
             local_written_total += int(local_written)
 
@@ -1299,6 +1513,24 @@ if __name__ == "__main__":
                              "downstream readers as target_sum - Y_a - Y_b. "
                              "Lossless; saves 1/3 on the final TM file size. "
                              "Default OFF for back-compat with older artifacts.")
+    parser.add_argument("--kprime-cap", "--kprime_cap", dest="kprime_cap",
+                        type=int, default=0,
+                        help="LOSSY: per (a_group, c_bucket) call, emit at most "
+                             "this many triples, keeping those whose Y_a has the "
+                             "smallest |sigma_1(Y_a) - center| (closest to the "
+                             "band center). 0 = disabled (default; byte-identical "
+                             "to legacy). Recommended 64 for f>=6 builds where "
+                             "the unpruned cross-join exceeds disk. Lossy at "
+                             "ranks 2..K within a call but provably preserves "
+                             "the top-1 Y_a per (a_group, c_bucket).")
+    parser.add_argument("--kprime-u-a-sq", "--kprime_u_a_sq",
+                        dest="kprime_u_a_sq", type=float, default=0.0,
+                        help="|u|² magnitude target for the A slot, used by "
+                             "the K'-cap kernel to set the σ_1 band center "
+                             "(center = kprime_u_a_sq · 3^{2f}). Default 0.0 "
+                             "matches the typical wrapper layout where A is "
+                             "the smallest input (u=0 slot). Pass 1.0 if A is "
+                             "a u=1 slot. Ignored when --kprime-cap == 0.")
     args = parser.parse_args()
 
     out = select_triples_mpi(
@@ -1316,6 +1548,8 @@ if __name__ == "__main__":
         resume=args.resume,
         verbose=not args.quiet,
         drop_col_c=args.drop_col_c,
+        kprime_cap=args.kprime_cap,
+        kprime_u_a_sq=args.kprime_u_a_sq,
     )
     if MPI.COMM_WORLD.Get_rank() == 0 and args.quiet:
         print(out)

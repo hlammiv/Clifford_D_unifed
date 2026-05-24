@@ -258,7 +258,8 @@ def fmt_eps(eps):
     return f"{eps:g}"
 
 
-def artifact_paths(workdir, f, eps_pre, check_local_p3k=False, mode="householder"):
+def artifact_paths(workdir, f, eps_pre, check_local_p3k=False, mode="householder",
+                   kprime_cap=0):
     """Return dict of stage→artifact path (the sentinel file we check for caching).
 
     When check_local_p3k=True, stage-1 / downstream caches are tagged with `_p3k`
@@ -273,22 +274,28 @@ def artifact_paths(workdir, f, eps_pre, check_local_p3k=False, mode="householder
     Both modes are explicitly tagged (`_hh` for householder, `_diag` for
     diagonal). Untagged paths exist on disk from earlier sessions with the
     wrong norm=2 setup; tagging both prevents collisions with that stale state.
+
+    When ``kprime_cap > 0`` (LOSSY stage-2 prune, feature branch
+    kprime-cap-stage2-lossy), stage-2+ cache paths get a `_kp{N}` suffix so the
+    pruned TM file does NOT shadow a previously-computed full TM file. Stage 1
+    is shared because the prune only affects the cross-join step.
     """
     label = fmt_eps(eps_pre)
     suffix = "_p3k" if check_local_p3k else ""
     mode_tag = "_hh" if mode == "householder" else "_diag"
+    kp_tag = f"_kp{int(kprime_cap)}" if kprime_cap and int(kprime_cap) > 0 else ""
     d = workdir / "D"
     return {
         "stage1_u0": d / f"Y1_f={f}_u=0_eps={label}{suffix}.npy",
         "stage1_u1": d / f"Y1_f={f}_u=1_eps={label}{suffix}.npy",
-        "stage2":    d / f"TM_f={f}_eps={label}{suffix}{mode_tag}",
-        "stage2_manifest": d / f"TM_f={f}_eps={label}{suffix}{mode_tag}.manifest.json",
-        "stage3":    d / f"RM_f={f}_eps={label}{suffix}{mode_tag}_local.roots.json",
-        "stage3_prefix": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}_local",
+        "stage2":    d / f"TM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}",
+        "stage2_manifest": d / f"TM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}.manifest.json",
+        "stage3":    d / f"RM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}_local.roots.json",
+        "stage3_prefix": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}_local",
         "stage3_global_prefix": d / f"RM_f={f}_global",
-        "stage4_sidecar": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}_local.phase_sidecar_binned_bins=512.meta.json",
-        "stage4_meta": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}_triples_chunk_meta.json",
-        "stage4_meta_prefix": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}_triples_chunk_meta",
+        "stage4_sidecar": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}_local.phase_sidecar_binned_bins=512.meta.json",
+        "stage4_meta": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}_triples_chunk_meta.json",
+        "stage4_meta_prefix": d / f"RM_f={f}_eps={label}{suffix}{mode_tag}{kp_tag}_triples_chunk_meta",
     }
 
 
@@ -308,7 +315,8 @@ def run_cmd(cmd, env, cwd, label, dry_run=False):
 
 def ensure_precompute(workdir, f, eps_pre, mpi, sage_env, dry_run=False,
                       check_local_p3k=False, mode="householder",
-                      eps_target=None, lazy_u_values=None):
+                      eps_target=None, lazy_u_values=None,
+                      kprime_cap=0):
     """Run stages 1-4 if their artifacts don't exist.
 
     Mode determines stage-2 norm and input layout:
@@ -324,7 +332,8 @@ def ensure_precompute(workdir, f, eps_pre, mpi, sage_env, dry_run=False,
     Returns dict of per-stage wall seconds (0 if cached)."""
     if mode not in ("diagonal", "householder"):
         raise ValueError(f"mode must be 'diagonal' or 'householder', got {mode!r}")
-    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k, mode=mode)
+    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k,
+                          mode=mode, kprime_cap=kprime_cap)
     env = stages_env(sage_env)
     py = f"{sage_env}/bin/python"
     sage_python = [f"{sage_env}/bin/sage", "-python"]
@@ -398,6 +407,16 @@ def ensure_precompute(workdir, f, eps_pre, mpi, sage_env, dry_run=False,
         # non-v2 fitters).
         if os.environ.get("ZETA9_NO_DROP_COL_C", "") not in ("1", "true", "yes"):
             cmd.append("--drop_col_c")
+        # K'-cap (2026-05-24, feature branch kprime-cap-stage2-lossy): LOSSY
+        # per-(a_group, c_bucket) cap on emitted triples. Default off (byte-
+        # identical to legacy). Set --kprime-cap N (recommended 64 for f>=6).
+        # The wrapper-driven layout always puts the u=0 input as the smallest
+        # → A slot, so the σ_1 band center for Y_a is 0 (kprime_u_a_sq=0.0).
+        # This matches the kernel default but we pass it explicitly to make
+        # the assumption auditable in stage-2 manifests.
+        if kprime_cap and int(kprime_cap) > 0:
+            cmd += ["--kprime-cap", str(int(kprime_cap)),
+                    "--kprime-u-a-sq", "0.0"]
         times["stage2"] = run_cmd(cmd, env, workdir, "stage2 (select_triples)", dry_run)
 
     # Stage 3: find_roots_exact_v2
@@ -447,7 +466,8 @@ def ensure_precompute(workdir, f, eps_pre, mpi, sage_env, dry_run=False,
 
 
 def run_stage5(workdir, f, eps_pre, eps_frob, theta, mpi, sage_env, output_prefix,
-               dry_run=False, check_local_p3k=False, mode="householder"):
+               dry_run=False, check_local_p3k=False, mode="householder",
+               kprime_cap=0):
     """Run stage 5 for the given theta. Dispatches on mode.
 
     - ``mode='diagonal'``: invoke ``search_diagonal_matrix_two_rows_streamed_mpi.py``,
@@ -461,7 +481,8 @@ def run_stage5(workdir, f, eps_pre, eps_frob, theta, mpi, sage_env, output_prefi
       works without modification.
 
     Returns wall seconds."""
-    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k, mode=mode)
+    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k,
+                          mode=mode, kprime_cap=kprime_cap)
     env = stages_env(sage_env)
     py = f"{sage_env}/bin/python"
     # MPICH (Lenore) doesn't accept --oversubscribe; OpenMPI (lucia) does.
@@ -508,7 +529,7 @@ def run_stage5(workdir, f, eps_pre, eps_frob, theta, mpi, sage_env, output_prefi
 
 def run_stage5_batched(workdir, f, eps_pre, eps_frob, thetas, mpi, sage_env,
                        output_dir, dry_run=False, check_local_p3k=False,
-                       mode="householder", query_ids=None):
+                       mode="householder", query_ids=None, kprime_cap=0):
     """Run stage 5 in BATCHED mode (one mpirun, many θ sharing one ε).
 
     Writes per-query results to ``output_dir/q_<id>.npz`` (and ``.json``).
@@ -531,7 +552,8 @@ def run_stage5_batched(workdir, f, eps_pre, eps_frob, thetas, mpi, sage_env,
     if query_ids is not None and len(query_ids) != len(thetas):
         raise ValueError(f"query_ids length {len(query_ids)} != thetas length {len(thetas)}")
 
-    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k, mode=mode)
+    arts = artifact_paths(workdir, f, eps_pre, check_local_p3k=check_local_p3k,
+                          mode=mode, kprime_cap=kprime_cap)
     env = stages_env(sage_env)
     py = f"{sage_env}/bin/python"
     _no_overs = os.environ.get("ZETA9_NO_OVERSUBSCRIBE", "") in ("1", "true", "yes")
@@ -796,6 +818,17 @@ def main():
     p.add_argument("--no-check-local-p3k", dest="check_local_p3k",
                    action="store_false",
                    help="Disable p3k screen even at tight epsilon.")
+    p.add_argument("--kprime-cap", "--kprime_cap", dest="kprime_cap",
+                   type=int, default=0,
+                   help="LOSSY stage-2 prune (feature branch kprime-cap-stage2-"
+                        "lossy): per (a_group, c_bucket) call, keep at most this "
+                        "many triples sorted by smallest |sigma_1(Y_a)|. 0 = "
+                        "disabled (default, byte-identical to legacy). "
+                        "Recommended 64 for f>=6 builds where the unpruned "
+                        "stage-2 cross-join exceeds Lenore's 697 GB. Top-1 Y_a "
+                        "per call is provably preserved; ranks 2..K may be "
+                        "clipped (~10% miss rate at K'=64 per backlog estimate, "
+                        "verify empirically before shipping).")
     p.add_argument("--mode", choices=["diagonal", "householder"], default="householder",
                    help="Synthesis mode (Round-13, 2026-05-13):\n"
                         "  diagonal  : norm=1, inputs (u=1, u=0, u=0). For directly\n"
@@ -839,14 +872,16 @@ def main():
                                 check_local_p3k=args.check_local_p3k,
                                 mode=args.mode,
                                 eps_target=args.epsilon,
-                                lazy_u_values=_lazy_u)
+                                lazy_u_values=_lazy_u,
+                                kprime_cap=args.kprime_cap)
 
     # Stage 5: V-denom for zeta9 stage 5 args.
     output_prefix = workdir / "xout"
     times["stage5"] = run_stage5(workdir, f_v, eps_pre, args.epsilon, args.theta,
                                  args.mpi, sage_env, output_prefix, args.dry_run,
                                  check_local_p3k=args.check_local_p3k,
-                                 mode=args.mode)
+                                 mode=args.mode,
+                                 kprime_cap=args.kprime_cap)
 
     # Extract result.  Householder reconstruction uses u-denom.
     V_int, v_f, frob = (None, None, None)
