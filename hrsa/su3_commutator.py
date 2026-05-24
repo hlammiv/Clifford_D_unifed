@@ -122,14 +122,107 @@ def _commutator_residual(params, E):
     return float(np.vdot(R.flatten(), R.flatten()).real)
 
 
-def factor_commutator(E, polish=True, max_iter=400, verbose=False):
+def _residual_vec(params, E):
+    """Return flat real residual vector (length 18) for 3x3 complex G - E."""
+    cX = params[:8]
+    cY = params[8:]
+    A = matrix_exp_su3(cX)
+    B = matrix_exp_su3(cY)
+    R = group_commutator(A, B) - E
+    flat = R.reshape(-1)
+    return np.concatenate([flat.real, flat.imag])
+
+
+def _newton_refine(params, E, tol=1e-15, max_iter=30, verbose=False):
+    """Gauss-Newton refinement of the 16 commutator parameters.
+
+    Uses central finite differences for the 18x16 Jacobian. Each Newton step
+    costs ~32 matrix_exp_su3 calls (16 params x 2 FD evals). Typically 3-6
+    iterations drives residual from L-BFGS-B's 1e-9 floor to ~1e-14.
+
+    Returns (params, residual_norm).
+    """
+    params = params.copy()
+    r = _residual_vec(params, E)
+    r_norm = np.linalg.norm(r)
+
+    # FD step: sqrt of machine eps for double precision -> ~1.5e-8
+    h = 1.5e-8
+
+    for it in range(max_iter):
+        if r_norm < tol:
+            break
+
+        # Build 18 x 16 Jacobian via central differences.
+        J = np.empty((r.size, params.size), dtype=np.float64)
+        for k in range(params.size):
+            p_plus = params.copy()
+            p_minus = params.copy()
+            p_plus[k] += h
+            p_minus[k] -= h
+            J[:, k] = (_residual_vec(p_plus, E) - _residual_vec(p_minus, E)) / (2.0 * h)
+
+        # Solve least-squares J * dp = -r
+        try:
+            dp, *_ = np.linalg.lstsq(J, -r, rcond=None)
+        except np.linalg.LinAlgError:
+            break
+
+        # Trust-region / backtracking line search
+        alpha = 1.0
+        new_r_norm = r_norm
+        new_params = params
+        new_r = r
+        accepted = False
+        for _ls in range(8):
+            trial = params + alpha * dp
+            trial_r = _residual_vec(trial, E)
+            trial_norm = np.linalg.norm(trial_r)
+            if trial_norm < r_norm:
+                new_params = trial
+                new_r = trial_r
+                new_r_norm = trial_norm
+                accepted = True
+                break
+            alpha *= 0.5
+
+        if not accepted:
+            # No improvement found; stop.
+            if verbose:
+                print(f"    newton iter {it}: stalled at {r_norm:.3e}")
+            break
+
+        if verbose:
+            print(f"    newton iter {it}: residual {r_norm:.3e} -> {new_r_norm:.3e} (alpha={alpha:g})")
+
+        # Convergence: stop if relative improvement tiny.
+        if new_r_norm > 0.999 * r_norm:
+            params = new_params
+            r = new_r
+            r_norm = new_r_norm
+            break
+        params = new_params
+        r = new_r
+        r_norm = new_r_norm
+
+    return params, r_norm
+
+
+def factor_commutator(E, polish=True, max_iter=400, verbose=False,
+                       newton_tol=1e-14, newton_max_iter=20):
     """Return (A, B, residual) with A B A^dagger B^dagger approx E in SU(3).
 
     Pipeline:
       1) Analytic seed from log(E)/i diagonalization.
       2) Optional scipy.optimize.minimize (L-BFGS-B) polish on 16 real coords.
+      3) Gauss-Newton refinement to drive residual to machine precision.
 
     residual = |group_commutator(A, B) - E|_F.
+
+    The Newton refinement (step 3) typically drops residual from ~1e-9
+    (L-BFGS-B floor) down to ~1e-14, which is critical for deep
+    Solovay-Kitaev recursion where commutator residuals propagate
+    additively to every level.
     """
     cX0, cY0 = _analytic_seed(E)
     params = np.concatenate([cX0, cY0])
@@ -139,17 +232,27 @@ def factor_commutator(E, polish=True, max_iter=400, verbose=False):
         print(f"  seed residual = {r0:.3e}")
 
     if polish:
+        # Loose L-BFGS-B pass: get into the basin of the global min, then
+        # hand off to Newton. With newton_tol active we don't need scipy
+        # to grind out the last 5 digits.
         res = minimize(
             _commutator_residual,
             params,
             args=(E,),
             method="L-BFGS-B",
-            options={"maxiter": max_iter, "ftol": 1e-24, "gtol": 1e-14},
+            options={"maxiter": max_iter, "ftol": 1e-18, "gtol": 1e-10},
         )
         params = res.x
         if verbose:
             r1 = np.sqrt(_commutator_residual(params, E))
             print(f"  polished residual = {r1:.3e}, nit={res.nit}")
+
+        # Newton refinement to drive residual to machine precision.
+        params, _newton_r = _newton_refine(
+            params, E, tol=newton_tol, max_iter=newton_max_iter, verbose=verbose,
+        )
+        if verbose:
+            print(f"  newton residual = {_newton_r:.3e}")
 
     cX = params[:8]
     cY = params[8:]
