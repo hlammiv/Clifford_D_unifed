@@ -561,6 +561,31 @@ def solve_assigned_Ys_exact(Y_list, rank, verbose=False, use_legacy_fallback=Tru
     return root_info
 
 
+def solve_single_norm_eq(Y, use_legacy_fallback=True):
+    """MPI-free entry point: solve the q-norm equation for a single Y triple.
+
+    Wraps :func:`actual_roots_from_ideal_search` so external callers (notably
+    ``cvp/diophantine.py`` for the Babai-CVP Phase 3) can request roots for a
+    single ``(m0, m1, m2)`` without bringing up an MPI pipeline.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        All ``x ∈ Z[ζ_9]`` (6-tuples of ints) with
+        ``bb_to_real_coeffs(x) == (m0, m1, m2)``. Includes the ``ζ^k`` and
+        ``±`` orbit by default (matches stage-3 conventions).
+    """
+    res = actual_roots_from_ideal_search(
+        tuple(int(c) for c in Y),
+        orbit=True,
+        check_real_embeddings=True,
+        verbose=False,
+        rank=None,
+        use_legacy_fallback=use_legacy_fallback,
+    )
+    return [tuple(int(x) for x in r) for r in res.get("actual_roots", [])]
+
+
 def find_roots_exact_pipeline(
     triples_file: str,
     triples_json: str,

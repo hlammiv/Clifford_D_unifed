@@ -1,20 +1,38 @@
-"""cvp — qutrit Babai-CVP synthesis (Phase 1: Gram matrix + LLL basis).
+"""cvp — qutrit Babai-CVP synthesis (Phases 1-3).
 
-See `qutrit_babai_cvp_plan_2026-05-24` for the full 7-phase plan. Phase 1
-delivers only the Gram-matrix foundation: an integer Gram `B`, a numpy-only
-`q_form` matching HRSA's `ringZ9::quad()` bit-exactly, and a one-time LLL
-reduction of `B` cached at module-import time.
+See `qutrit_babai_cvp_plan_2026-05-24` for the full 7-phase plan.
+
+Implemented so far:
+
+* Phase 1 — Gram matrix + LLL basis (`cvp.gram`)
+* Phase 2 — 6-D Babai CVP for x_1 (`cvp.babai`)
+* Phase 3 — Diophantine (x_2, x_3) via zeta9 PARI (`cvp.diophantine`)
 """
 from cvp.gram import B, B_LLL_CACHE, U_lll, B_lll, lll_reduce, q_form
 from cvp.babai import babai_x1, minkowski_embedding
+from cvp.diophantine import (
+    enumerate_x3,
+    solve_q_norm,
+    solve_x2_x3,
+    verify_pair,
+    householder_frobenius,
+)
 
 __all__ = [
+    # Phase 1
     "B",
     "B_lll",
     "U_lll",
     "B_LLL_CACHE",
     "lll_reduce",
     "q_form",
+    # Phase 2
     "babai_x1",
     "minkowski_embedding",
+    # Phase 3
+    "enumerate_x3",
+    "solve_q_norm",
+    "solve_x2_x3",
+    "verify_pair",
+    "householder_frobenius",
 ]
