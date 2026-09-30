@@ -30,6 +30,9 @@ extern bool g_decompose_lookahead;
 extern bool g_hrsa_alt_order;
 extern int  g_hrsa_rf_gate;
 extern bool g_hrsa_mod3_filter;
+extern bool g_hrsa_rank_tcost;
+extern int  g_tcost_w4;
+extern int  g_tcost_wr;
 
 using namespace std;
 
@@ -44,6 +47,8 @@ int main(int argc, char* argv[]){
 		cout << "  max_f                : maximum f level to search" << endl;
 		cout << "  c                    : contraction factor in (0,1], default 1.0" << endl;
 		cout << "  --max-solns N        : collect N HRSA candidates, pick lowest D-count" << endl;
+		cout << "  --rank-tcost         : with --max-solns, pick lowest T-cost (T3 + w4*L4 + wr*R) instead of D-count" << endl;
+		cout << "  --tcost-w4 W / --tcost-wr W : T-cost weights for level-4 diagonals / R (default 7 / 7)" << endl;
 		cout << "  --max-direct K       : direct search up to K D-gates (default 2, 0=Clifford only)" << endl;
 		cout << "  --no-direct          : skip direct search, go straight to HRSA" << endl;
 		cout << "  --use-bidir MAX_K    : enable Phase 2 bidirectional BFS (MAX_K ∈ {3,4,5}; off by default)" << endl;
@@ -87,6 +92,12 @@ int main(int argc, char* argv[]){
 			if(k3 < 1) k3 = 1;
 		} else if(strcmp(argv[i], "--no-simplify") == 0){
 			g_decompose_simplify = false;
+		} else if(strcmp(argv[i], "--rank-tcost") == 0){
+			g_hrsa_rank_tcost = true;
+		} else if(strcmp(argv[i], "--tcost-w4") == 0 && i+1 < argc){
+			g_tcost_w4 = atoi(argv[++i]);
+		} else if(strcmp(argv[i], "--tcost-wr") == 0 && i+1 < argc){
+			g_tcost_wr = atoi(argv[++i]);
 		} else if(strcmp(argv[i], "--no-lookahead") == 0){
 			g_decompose_lookahead = false;
 		} else if(strcmp(argv[i], "--alt-order") == 0){

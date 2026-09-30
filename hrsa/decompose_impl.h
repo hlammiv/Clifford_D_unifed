@@ -360,8 +360,24 @@ DecompResultBase<T> decompose(Mat3Base<T> V, bool quiet) {
         return -1;
     };
 
+    // -- unitSign: sign s of a unit x = s * zeta_9^j (unique; -1 is not a power of zeta_9).
+    auto unitSign = [](const ringZ9chiBase<T>& x) -> int {
+        ringZ9Base<T> numer = x.getNumerator();
+        for (int j = 0; j < 9; ++j) {
+            ringZ9Base<T> zj(1, (9 - j) % 9);
+            ringZ9Base<T> prod = numer * zj;
+            bool is_pm1 = true;
+            for (int k = 1; k < 6; ++k) {
+                if (prod.getTerm(k) != T(0)) { is_pm1 = false; break; }
+            }
+            if (is_pm1 && prod.getTerm(0) == T(1)) return 1;
+            if (is_pm1 && prod.getTerm(0) == T(-1)) return -1;
+        }
+        return 0;
+    };
+
     // -- countMonomialD: returns total D+R cost (Convention B); is_monomial / r_out outputs.
-    auto countMonomialD = [&unitPhaseMod3](const Mat3Base<T>& M, bool& is_monomial, int& r_out) -> int {
+    auto countMonomialD = [&unitPhaseMod3, &unitSign](const Mat3Base<T>& M, bool& is_monomial, int& r_out) -> int {
         r_out = 0;
         int phases_mod3[3];
         is_monomial = true;
@@ -424,7 +440,15 @@ DecompResultBase<T> decompose(Mat3Base<T> V, bool quiet) {
             (p==1&&q==0&&r==2) || (p==2&&q==0&&r==1) ||
             (p==0&&q==1&&r==2) || (p==0&&q==2&&r==1) ||
             (p==1&&q==2&&r==0) || (p==2&&q==1&&r==0);
-        return one_gate ? 1 : 2;
+        // Residual R (2026-09-30): entries are ±zeta_9^j; mixed signs need
+        // one R = diag(1,1,-1), since zeta_9 phases and Cliffords only give
+        // uniform signs.  Previously uncharged in this branch.
+        int sgn[3] = {0, 0, 0};
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                if (!M.m[i][j].isZero()) sgn[i] = unitSign(M.m[i][j]);
+        if (!(sgn[0] == sgn[1] && sgn[1] == sgn[2])) r_out = 1;
+        return (one_gate ? 1 : 2) + r_out;
     };
 
     // Fast-path: V already monomial?

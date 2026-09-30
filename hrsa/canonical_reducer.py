@@ -888,6 +888,19 @@ def _unit_phase_mod3(x) -> int:
     return -1
 
 
+def _unit_sign(x) -> int:
+    """If x is a unit ±zeta_9^j (denom_pow3=0), return the sign ±1; else 0.
+    The representation is unique because -1 is not a power of zeta_9."""
+    if x.denom_pow3 != 0:
+        return 0
+    numer = x.num
+    for j in range(9):
+        pc = (numer * _zeta9_power(9 - j).num).coefs
+        if not (pc[1] or pc[2] or pc[3] or pc[4] or pc[5]) and pc[0] in (1, -1):
+            return 1 if pc[0] == 1 else -1
+    return 0
+
+
 def classify_monomial_and_d_cost(M):
     """Return (is_monomial, d_count, r_count).  d_count includes r_count.
 
@@ -898,8 +911,15 @@ def classify_monomial_and_d_cost(M):
       where M = sign * Clifford for non-identity sign add 1 D-cost).
     - Else if all phase_mod3 are 0: 0 D (or 1 if non-trivial sign).
     - Else use the 1-gate / 2-gate heuristic on (p, q, r) mod 3 pattern.
+
+    Residual R (added 2026-09-30): a Clifford monomial has uniform entry
+    signs (global -1 is free), and zeta_9 phases cannot produce -1, so a
+    monomial whose entries (±zeta_9^j) have MIXED signs needs exactly one
+    R = diag(1,1,-1).  That costs r_count = 1 and adds 1 to d_count.  This
+    was previously hard-coded to 0.
     """
     phases_mod3 = [-1, -1, -1]
+    signs = [0, 0, 0]
     is_mono = True
     for i in range(3):
         nz_count = 0
@@ -910,8 +930,10 @@ def classify_monomial_and_d_cost(M):
                 if pm3 < 0:
                     return False, -1, 0
                 phases_mod3[i] = pm3
+                signs[i] = _unit_sign(M[i][j])
         if nz_count != 1:
             return False, -1, 0
+    r_cost = 0 if len(set(signs)) == 1 else 1
     p, q, r = phases_mod3
     if p == 0 and q == 0 and r == 0:
         # All phases are powers of omega = zeta_9^3, i.e. Clifford-compatible.
@@ -921,14 +943,15 @@ def classify_monomial_and_d_cost(M):
         # If the SK output ever produces a residual that requires the +1,
         # the verification step will still pass (the +1 is a Clifford R
         # post-rotation that can absorb into the trailing_clifford).
-        return True, 0, 0
+        # Mixed signs are never Clifford: charge the residual R.
+        return True, r_cost, r_cost
     one_gate = (
         (p == 1 and q == 0 and r == 2) or (p == 2 and q == 0 and r == 1) or
         (p == 0 and q == 1 and r == 2) or (p == 0 and q == 2 and r == 1) or
         (p == 1 and q == 2 and r == 0) or (p == 2 and q == 1 and r == 0)
     )
     d_cost = 1 if one_gate else 2
-    return True, d_cost, 0
+    return True, d_cost + r_cost, r_cost
 
 
 # ---------------------------------------------------------------------------

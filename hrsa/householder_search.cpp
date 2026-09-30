@@ -35,6 +35,35 @@ const double FILTER_REL_TOL = 1e-6;
 extern std::atomic<bool> interrupted;
 extern bool g_hrsa_alt_order;  // defined in decompose.cpp; toggles outer x_1 alternating iteration
 extern bool g_hrsa_mod3_filter;  // defined in decompose.cpp; Kalra-Mosca-Valluri 2023 Thm 3.7 prune
+extern bool g_hrsa_rank_tcost;  // defined in decompose.cpp; rank candidates by T-cost
+extern int  g_tcost_w4;
+extern int  g_tcost_wr;
+
+// T-cost breakdown of a decomposition (2026-09-30).  Syllable diagonal
+// Diag(zeta^a0, zeta^a1, zeta^a2) with any a_i % 3 != 0 is level-3 (one T)
+// iff (a0+a1+a2) % 3 == 0, else level-4.  R = syllable eps plus the residual
+// R from the trailing monomial (R_only - sum eps).  The residual zeta_9
+// phases are approximated from the D-pattern cost: 1 -> T-type, 2 -> level-4.
+struct TCostInfo { int n_t3, n_l4, n_r, tcost; };
+static TCostInfo tcost_of(const DecompResult& dr){
+	TCostInfo t{0, 0, 0, 0};
+	int step_d = 0, step_r = 0;
+	for(const auto& st : dr.steps){
+		bool nonclif = (st.a0 % 3 != 0) || (st.a1 % 3 != 0) || (st.a2 % 3 != 0);
+		if(nonclif){
+			if(((st.a0 + st.a1 + st.a2) % 3) == 0) t.n_t3++; else t.n_l4++;
+		}
+		step_d += count_d_from_cyclo(st.a0, st.a1, st.a2);
+		if(st.eps != 0) step_r++;
+	}
+	int resid_r = dr.R_only - step_r;   if(resid_r < 0) resid_r = 0;
+	int resid_d = dr.D_only - step_d;
+	if(resid_d == 1) t.n_t3++;
+	else if(resid_d >= 2) t.n_l4++;
+	t.n_r = step_r + resid_r;
+	t.tcost = t.n_t3 + g_tcost_w4 * t.n_l4 + g_tcost_wr * t.n_r;
+	return t;
+}
 extern int g_hrsa_rf_gate;     // defined in decompose.cpp; if >0, take union(distance-top-K, RF-top-K) for outer iteration
 
 // Global mutex protecting all cout output. Without this, concurrent epsTest calls
@@ -761,6 +790,7 @@ array<ringZ9chi,3> HRSA_bestD(double theta, double epsilon, int max_f, double c,
 
 			int n_solns = (int)solutions.size();
 			vector<int> d_counts(n_solns, INT_MAX);
+			vector<TCostInfo> tcosts(n_solns, TCostInfo{0, 0, 0, INT_MAX});
 
 			// Each decompose() call is independent — parallelize across candidates.
 			// cout inside decompose() may interleave, but correctness is unaffected.
@@ -769,11 +799,13 @@ array<ringZ9chi,3> HRSA_bestD(double theta, double epsilon, int max_f, double c,
 				Mat3 V = buildUnitary(solutions[s]);
 				DecompResult dr = decompose(V, true);  // quiet: suppress cout in parallel
 				d_counts[s] = dr.success ? dr.D_count : INT_MAX;
+				if(dr.success) tcosts[s] = tcost_of(dr);
 			}
 
 			// Find best and report (serial, so output is clean)
 			int best_idx = 0;
 			int best_D = INT_MAX;
+			int best_T = INT_MAX;
 			for(int s = 0; s < n_solns; ++s){
 				cout << "  Candidate " << (s+1) << "/" << n_solns
 				     << ": D_gates=" << (d_counts[s] < INT_MAX ? to_string(d_counts[s]) : "FAIL") << endl;
@@ -797,8 +829,20 @@ array<ringZ9chi,3> HRSA_bestD(double theta, double epsilon, int max_f, double c,
 				for(int kk = 0; kk < 6; ++kk) cout << " " << num2.getTerm(kk);
 				for(int kk = 0; kk < 6; ++kk) cout << " " << num3.getTerm(kk);
 				cout << endl;
-				if(d_counts[s] < best_D){
+				if(d_counts[s] < INT_MAX){
+					cout << "CANDTCOST " << s << " " << tcosts[s].n_t3 << " " << tcosts[s].n_l4
+					     << " " << tcosts[s].n_r << " " << tcosts[s].tcost << endl;
+				}
+				bool better;
+				if(g_hrsa_rank_tcost){
+					better = tcosts[s].tcost < best_T ||
+					         (tcosts[s].tcost == best_T && d_counts[s] < best_D);
+				} else {
+					better = d_counts[s] < best_D;
+				}
+				if(better && d_counts[s] < INT_MAX){
 					best_D = d_counts[s];
+					best_T = tcosts[s].tcost;
 					best_idx = s;
 				}
 			}
@@ -811,7 +855,8 @@ array<ringZ9chi,3> HRSA_bestD(double theta, double epsilon, int max_f, double c,
 			cout << "Epsilon Diff. Val.: " << eps_diff
 			     << " Eps. Cond.: " << epsilon*epsilon/(8.0*c*c) << endl;
 			cout << "Selected candidate " << (best_idx+1) << " with "
-			     << best_D << " D-gate(s)." << endl;
+			     << best_D << " D-gate(s), T-cost " << best_T
+			     << (g_hrsa_rank_tcost ? " (ranked by T-cost)." : " (ranked by D-count).") << endl;
 			cout << "Success!" << endl;
 			return answer;
 		}

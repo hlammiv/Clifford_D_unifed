@@ -1,0 +1,145 @@
+rows 900, success 900, greedy used 0
+wrote candidates_all.csv
+R_resid_classify nonzero: 0 | R_resid_sign nonzero: 681
+HRSA C++ D (with simplifier) == reducer N_D: 0.9777777777777777
+
+eps=0.01 theta=0.3: n=100 f=3 frob[min,med,max]=0.005763,0.006544,0.007048
+  n_R hist {0: 2, 2: 31, 3: 5, 4: 33, 5: 7, 6: 14, 7: 3, 8: 3, 10: 2}; R_syl hist {0: 2, 1: 22, 2: 13, 3: 30, 4: 9, 5: 14, 6: 5, 7: 3, 9: 2}
+  N_D med 45.0 [25-64]; Tcost med 161.5 [65-317]; T3 med 17.0 L4 med 7.0
+  frob-best: frob=0.005763 N_D=39 n_R=2 T3=14 L4=8 Tcost=126
+  within 10% of best frob: 36 cands; min Tcost=65 (n_R=0, N_D=57, frob=0.006319); min n_R=0; frac with fewer R than frob-best=0.06
+  global: min Tcost=65 (frob 0.006319); min-N_D cand (HRSA_bestD pick) Tcost=229 n_R=6
+
+eps=0.01 theta=0.5: n=100 f=3 frob[min,med,max]=0.005806,0.00659,0.007051
+  n_R hist {2: 33, 3: 6, 4: 25, 5: 8, 6: 22, 7: 3, 8: 2, 10: 1}; R_syl hist {1: 26, 2: 11, 3: 23, 4: 8, 5: 26, 6: 3, 7: 2, 9: 1}
+  N_D med 46.0 [28-64]; Tcost med 161.0 [97-317]; T3 med 17.0 L4 med 7.0
+  frob-best: frob=0.005806 N_D=43 n_R=3 T3=16 L4=8 Tcost=152
+  within 10% of best frob: 26 cands; min Tcost=97 (n_R=2, N_D=56, frob=0.005956); min n_R=2; frac with fewer R than frob-best=0.42
+  global: min Tcost=97 (frob 0.005956); min-N_D cand (HRSA_bestD pick) Tcost=173 n_R=2
+
+eps=0.01 theta=1.0: n=100 f=3 frob[min,med,max]=0.00563,0.006584,0.00705
+  n_R hist {0: 10, 1: 1, 2: 23, 3: 6, 4: 27, 5: 6, 6: 21, 7: 3, 8: 3}; R_syl hist {0: 10, 1: 21, 2: 8, 3: 25, 4: 8, 5: 16, 6: 9, 7: 3}
+  N_D med 44.0 [29-64]; Tcost med 170.0 [53-259]; T3 med 16.0 L4 med 7.0
+  frob-best: frob=0.00563 N_D=30 n_R=6 T3=5 L4=13 Tcost=253
+  within 10% of best frob: 16 cands; min Tcost=125 (n_R=2, N_D=52, frob=0.005909); min n_R=2; frac with fewer R than frob-best=0.75
+  global: min Tcost=53 (frob 0.00662); min-N_D cand (HRSA_bestD pick) Tcost=229 n_R=5
+
+eps=0.01 theta=1.7: n=100 f=3 frob[min,med,max]=0.005614,0.006488,0.007034
+  n_R hist {0: 14, 2: 29, 3: 7, 4: 28, 5: 6, 6: 11, 7: 1, 8: 3, 10: 1}; R_syl hist {0: 14, 1: 17, 2: 16, 3: 25, 4: 11, 5: 11, 6: 2, 7: 3, 9: 1}
+  N_D med 45.0 [28-64]; Tcost med 147.0 [44-310]; T3 med 17.0 L4 med 7.0
+  frob-best: frob=0.005614 N_D=42 n_R=2 T3=16 L4=8 Tcost=128
+  within 10% of best frob: 20 cands; min Tcost=77 (n_R=0, N_D=51, frob=0.005817); min n_R=0; frac with fewer R than frob-best=0.10
+  global: min Tcost=44 (frob 0.006844); min-N_D cand (HRSA_bestD pick) Tcost=269 n_R=8
+
+eps=0.01 theta=2.5: n=100 f=3 frob[min,med,max]=0.005783,0.006726,0.007053
+  n_R hist {0: 2, 2: 25, 3: 3, 4: 36, 5: 3, 6: 26, 7: 3, 8: 2}; R_syl hist {0: 2, 1: 20, 2: 7, 3: 31, 4: 9, 5: 25, 6: 4, 7: 2}
+  N_D med 46.0 [30-64]; Tcost med 171.0 [45-287]; T3 med 17.0 L4 med 7.0
+  frob-best: frob=0.005783 N_D=34 n_R=8 T3=7 L4=11 Tcost=287
+  within 10% of best frob: 17 cands; min Tcost=113 (n_R=2, N_D=58, frob=0.00599); min n_R=2; frac with fewer R than frob-best=0.94
+  global: min Tcost=45 (frob 0.006788); min-N_D cand (HRSA_bestD pick) Tcost=246 n_R=6
+
+eps=0.1 theta=0.3: n=80 f=2 frob[min,med,max]=0.05012,0.06274,0.07022
+  n_R hist {0: 4, 1: 1, 2: 29, 3: 7, 4: 27, 5: 5, 6: 6, 7: 1}; R_syl hist {0: 4, 1: 24, 2: 12, 3: 27, 4: 6, 5: 6, 6: 1}
+  N_D med 31.0 [20-46]; Tcost med 121.0 [34-207]; T3 med 12.0 L4 med 4.0
+  frob-best: frob=0.05012 N_D=39 n_R=0 T3=18 L4=2 Tcost=34
+  within 10% of best frob: 9 cands; min Tcost=34 (n_R=0, N_D=39, frob=0.05012); min n_R=0; frac with fewer R than frob-best=0.00
+  global: min Tcost=34 (frob 0.05012); min-N_D cand (HRSA_bestD pick) Tcost=172 n_R=5
+
+eps=0.1 theta=0.5: n=80 f=2 frob[min,med,max]=0.04747,0.06312,0.07024
+  n_R hist {0: 11, 1: 1, 2: 40, 3: 4, 4: 19, 5: 3, 6: 2}; R_syl hist {0: 11, 1: 31, 2: 13, 3: 18, 4: 4, 5: 3}
+  N_D med 31.5 [16-46]; Tcost med 101.0 [27-189]; T3 med 11.0 L4 med 5.0
+  frob-best: frob=0.04747 N_D=24 n_R=4 T3=9 L4=2 Tcost=121
+  within 10% of best frob: 4 cands; min Tcost=113 (n_R=2, N_D=28, frob=0.04845); min n_R=2; frac with fewer R than frob-best=0.25
+  global: min Tcost=27 (frob 0.05919); min-N_D cand (HRSA_bestD pick) Tcost=130 n_R=2
+
+eps=0.1 theta=1.0: n=80 f=2 frob[min,med,max]=0.04565,0.06147,0.07011
+  n_R hist {0: 8, 1: 2, 2: 34, 3: 6, 4: 18, 5: 7, 6: 3, 8: 2}; R_syl hist {0: 8, 1: 29, 2: 11, 3: 19, 4: 7, 5: 4, 7: 2}
+  N_D med 31.0 [20-46]; Tcost med 106.0 [29-251]; T3 med 11.0 L4 med 5.0
+  frob-best: frob=0.04565 N_D=29 n_R=5 T3=9 L4=5 Tcost=169
+  within 10% of best frob: 2 cands; min Tcost=168 (n_R=5, N_D=27, frob=0.04643); min n_R=5; frac with fewer R than frob-best=0.00
+  global: min Tcost=29 (frob 0.06195); min-N_D cand (HRSA_bestD pick) Tcost=171 n_R=4
+
+eps=0.1 theta=1.7: n=80 f=2 frob[min,med,max]=0.04715,0.06191,0.07028
+  n_R hist {0: 10, 1: 3, 2: 39, 3: 5, 4: 14, 5: 2, 6: 4, 7: 2, 8: 1}; R_syl hist {0: 10, 1: 31, 2: 15, 3: 14, 4: 3, 5: 4, 6: 2, 7: 1}
+  N_D med 31.0 [18-46]; Tcost med 101.0 [34-237]; T3 med 11.0 L4 med 5.0
+  frob-best: frob=0.04715 N_D=31 n_R=5 T3=11 L4=3 Tcost=155
+  within 10% of best frob: 4 cands; min Tcost=101 (n_R=2, N_D=34, frob=0.05082); min n_R=2; frac with fewer R than frob-best=0.50
+  global: min Tcost=34 (frob 0.065); min-N_D cand (HRSA_bestD pick) Tcost=115 n_R=2
+
+eps=0.1 theta=2.5: n=80 f=2 frob[min,med,max]=0.04583,0.06173,0.07032
+  n_R hist {0: 11, 2: 33, 3: 7, 4: 21, 5: 4, 6: 4}; R_syl hist {0: 11, 1: 28, 2: 12, 3: 19, 4: 5, 5: 5}
+  N_D med 33.0 [14-46]; Tcost med 105.0 [29-203]; T3 med 13.0 L4 med 4.0
+  frob-best: frob=0.04583 N_D=40 n_R=2 T3=17 L4=3 Tcost=89
+  within 10% of best frob: 4 cands; min Tcost=65 (n_R=0, N_D=27, frob=0.05001); min n_R=0; frac with fewer R than frob-best=0.25
+  global: min Tcost=29 (frob 0.06159); min-N_D cand (HRSA_bestD pick) Tcost=154 n_R=5
+
+=== correlations (pooled, within-cell ranks) ===
+  spearman(n_R, N_D) per cell: [-0.47 -0.33 -0.41 -0.2  -0.44 -0.32 -0.3  -0.32 -0.29 -0.32]
+  spearman(n_R, frob) per cell: [ 0.12  0.1  -0.09 -0.01  0.05 -0.19 -0.09 -0.07 -0.1  -0.1 ]
+  spearman(n_R, n_T3) per cell: [-0.53 -0.38 -0.47 -0.28 -0.49 -0.4  -0.37 -0.45 -0.39 -0.39]
+  spearman(n_R, n_L4) per cell: [ 0.08 -0.03  0.01 -0.12  0.04 -0.01 -0.05  0.04  0.04  0.05]
+  spearman(n_R, Tcost) per cell: [0.93 0.93 0.94 0.95 0.93 0.93 0.91 0.93 0.93 0.93]
+  spearman(n_R, sde0) per cell: [-0.06  0.05  0.07  0.07  0.01  0.13  0.12  0.23  0.14  0.04]
+  spearman(n_R, n_syl) per cell: [-0.86 -0.83 -0.9  -0.75 -0.9  -0.76 -0.63 -0.65 -0.61 -0.68]
+
+=== predictors ===
+-- by col0_rel
+            n  mean_nR  mean_Rsyl  frac_R0  first_eps  resid
+col0_rel                                                    
+0         900    3.348      2.591     0.08      0.757  0.757
+-- by col0_dig
+            n  mean_nR  mean_Rsyl  frac_R0  first_eps  resid
+col0_dig                                                    
+111       219    1.973      1.973    0.329        0.0    0.0
+112       232    3.815      2.815    0.000        1.0    1.0
+121       238    3.706      2.706    0.000        1.0    1.0
+122       211    3.858      2.858    0.000        1.0    1.0
+-- by row0_dig
+            n  mean_nR  mean_Rsyl  frac_R0  first_eps  resid
+row0_dig                                                    
+111       219    1.973      1.973    0.329        0.0    0.0
+112       232    3.815      2.815    0.000        1.0    1.0
+121       211    3.858      2.858    0.000        1.0    1.0
+122       238    3.706      2.706    0.000        1.0    1.0
+-- by det_sign
+            n  mean_nR  mean_Rsyl  frac_R0  first_eps  resid
+det_sign                                                    
+1         900    3.348      2.591     0.08      0.757  0.757
+-- by trail_det
+             n  mean_nR  mean_Rsyl  frac_R0  first_eps  resid
+trail_det                                                    
+-1         614    3.651      2.704    0.000      0.948  0.948
+1          286    2.696      2.350    0.252      0.346  0.346
+
+parity identity (-1)^R_syl == sign det V * sign det T holds: 1.0
+R_syl parity vs det_sign(V):
+R_syl       0    1
+det_sign          
+1         286  614
+n_R parity vs det_sign(V):
+n_R         0    1
+det_sign          
+1         769  131
+
+=== chi-adic sign-class filter (col0_dig == '111', i.e. first column leading digits all equal mod chi) ===
+first_eps       0    1  All
+R_resid_sign    0    1     
+cls111                     
+False           0  681  681
+True          219    0  219
+All           219  681  900
+mid-word R (R_syl - first_eps) by class:
+         count  mean   std  min  25%  50%  75%  max
+cls111                                            
+False   681.0  1.79  1.70  0.0  0.0  2.0  3.0  8.0
+True    219.0  1.97  1.78  0.0  0.0  2.0  3.0  6.0
+eps=0.01 th=0.3: frac111=0.20; meanT 111=141 vs other=174; meanN_D 111=44.5 vs 45.4; near-best-frob: n=36 n111=9 minT(all)=65 minT(111)=65 frobbest T=126 (111=True)
+eps=0.01 th=0.5: frac111=0.17; meanT 111=151 vs other=172; meanN_D 111=42.2 vs 46.1; near-best-frob: n=26 n111=0 minT(all)=97 minT(111)=NA frobbest T=152 (111=False)
+eps=0.01 th=1.0: frac111=0.25; meanT 111=135 vs other=175; meanN_D 111=44.3 vs 45.3; near-best-frob: n=16 n111=3 minT(all)=125 minT(111)=167 frobbest T=253 (111=False)
+eps=0.01 th=1.7: frac111=0.37; meanT 111=116 vs other=172; meanN_D 111=45.0 vs 45.5; near-best-frob: n=20 n111=5 minT(all)=77 minT(111)=77 frobbest T=128 (111=False)
+eps=0.01 th=2.5: frac111=0.15; meanT 111=136 vs other=177; meanN_D 111=46.2 vs 46.4; near-best-frob: n=17 n111=2 minT(all)=113 minT(111)=135 frobbest T=287 (111=False)
+eps=0.1 th=0.3: frac111=0.16; meanT 111=85 vs other=129; meanN_D 111=29.8 vs 32.0; near-best-frob: n=9 n111=3 minT(all)=34 minT(111)=34 frobbest T=34 (111=True)
+eps=0.1 th=0.5: frac111=0.33; meanT 111=80 vs other=118; meanN_D 111=30.1 vs 31.7; near-best-frob: n=4 n111=1 minT(all)=113 minT(111)=121 frobbest T=121 (111=True)
+eps=0.1 th=1.0: frac111=0.26; meanT 111=78 vs other=128; meanN_D 111=31.2 vs 31.3; near-best-frob: n=2 n111=0 minT(all)=168 minT(111)=NA frobbest T=169 (111=False)
+eps=0.1 th=1.7: frac111=0.33; meanT 111=79 vs other=127; meanN_D 111=29.2 vs 31.5; near-best-frob: n=4 n111=0 minT(all)=101 minT(111)=NA frobbest T=155 (111=False)
+eps=0.1 th=2.5: frac111=0.24; meanT 111=74 vs other=121; meanN_D 111=31.2 vs 32.9; near-best-frob: n=4 n111=1 minT(all)=65 minT(111)=65 frobbest T=89 (111=False)

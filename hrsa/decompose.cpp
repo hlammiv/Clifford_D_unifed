@@ -47,6 +47,13 @@ bool g_hrsa_alt_order = false;
 // Citation: Kalra, Mosca, Valluri, "Synthesis and Arithmetic of Single
 // Qutrit Circuits", arXiv:2311.08696 / Quantum 9, 1647 (2025).
 bool g_hrsa_mod3_filter = false;
+// 2026-09-30: HRSA_bestD selection by fault-tolerant T-cost instead of D-count.
+// Weights per non-Clifford op on a qutrit T-factory device (1 clean ancilla):
+// T-type diagonal = 1 T, level-4 diagonal = g_tcost_w4 T, R = g_tcost_wr T
+// (verified 7-T constructions: unified/r_from_d/verify_R7T.py).
+bool g_hrsa_rank_tcost = false;
+int  g_tcost_w4 = 7;
+int  g_tcost_wr = 7;
 // Phase 3.5 — RF-augmented sub-cluster gating.  If >0, after entryEnumeration
 // rank x_1 candidates by (a) distance to target (existing order) and (b)
 // trained Random Forest predicted N_D (rf_features + rf_model).  Iterate the
@@ -463,7 +470,23 @@ DecompResult decompose(Mat3 V, bool quiet) {
 
     // Returns total D+R cost (Convention B).  r_out is the R-only contribution
     // (subset of the total) so callers can split for Convention C accounting.
-    auto countMonomialD = [&unitPhaseMod3](const Mat3& M, bool& is_monomial, int& r_out) -> int {
+    // Sign s of a unit x = s * zeta_9^j (unique; -1 is not a power of zeta_9).
+    auto unitSign = [](const ringZ9chi& x) -> int {
+        ringZ9 numer = x.getNumerator();
+        for (int j = 0; j < 9; ++j) {
+            ringZ9 zj(1, (9 - j) % 9);
+            ringZ9 prod = numer * zj;
+            bool is_pm1 = true;
+            for (int k = 1; k < 6; ++k) {
+                if (prod.getTerm(k) != 0) { is_pm1 = false; break; }
+            }
+            if (is_pm1 && prod.getTerm(0) == 1) return 1;
+            if (is_pm1 && prod.getTerm(0) == -1) return -1;
+        }
+        return 0;
+    };
+
+    auto countMonomialD = [&unitPhaseMod3, &unitSign](const Mat3& M, bool& is_monomial, int& r_out) -> int {
         r_out = 0;
         int phases_mod3[3];
         is_monomial = true;
@@ -536,13 +559,19 @@ DecompResult decompose(Mat3 V, bool quiet) {
             is_monomial = false;
             return -1;
         }
-        // (p,q,r) ≠ (0,0,0): hardcoded D-pattern heuristic.  All cost is D-type
-        // here (no R contribution); r_out stays at 0.
+        // (p,q,r) ≠ (0,0,0): hardcoded D-pattern heuristic for the zeta_9
+        // phases.  Residual R (2026-09-30): entries are ±zeta_9^j and mixed
+        // signs need one R = diag(1,1,-1); previously uncharged here.
         bool one_gate =
             (p==1&&q==0&&r==2) || (p==2&&q==0&&r==1) ||
             (p==0&&q==1&&r==2) || (p==0&&q==2&&r==1) ||
             (p==1&&q==2&&r==0) || (p==2&&q==1&&r==0);
-        return one_gate ? 1 : 2;
+        int sgn[3] = {0, 0, 0};
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                if (!M.m[i][j].isZero()) sgn[i] = unitSign(M.m[i][j]);
+        if (!(sgn[0] == sgn[1] && sgn[1] == sgn[2])) r_out = 1;
+        return (one_gate ? 1 : 2) + r_out;
     };
 
     // Check: is V already monomial?
