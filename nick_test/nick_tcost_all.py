@@ -9,6 +9,8 @@ fault-tolerant counts:
 unified/level4/l4_7T_verify.py).  Residual zeta_9 phases of the trailing
 monomial: D-pattern cost 1 -> T-type, 2 -> level-4.
 Output: nick_tcost_2026-09-30.csv (first 150 rows per f, matching the headline set).
+--select tcost: the reducer chooses among sde-reducing prefixes by T-cost
+instead of per-phase D-count (same matrices, possibly cheaper words).
 """
 import argparse
 import csv
@@ -24,7 +26,8 @@ def work(item):
     import numpy as np
     import canonical_reducer as cr
     from ingest_decompose import build_ring, build_complex
-    f, th, g = item
+    f, th, g, select = item
+    cr.set_selection_cost(select)
     Mc = build_complex(g, f)
     tgt = np.diag([np.exp(-1j * th / 2), np.exp(1j * th / 2), 1])
     eps = float(np.linalg.norm(Mc - tgt))
@@ -57,12 +60,15 @@ def main():
     ap.add_argument("--fs", default="4,6,8,10,12,14,16")
     ap.add_argument("--procs", type=int, default=12)
     ap.add_argument("--per-f", type=int, default=150)
+    ap.add_argument("--select", choices=["d", "tcost"], default="d",
+                    help="reducer prefix-selection cost (canonical_reducer.set_selection_cost)")
+    ap.add_argument("--out", default="nick_tcost_2026-09-30.csv")
     a = ap.parse_args()
     items = []
     for f in map(int, a.fs.split(",")):
         F, rows = parse_fits_file(H / f"fits_f={f}.txt")
-        items += [(F, th, g) for _, th, g in rows[: a.per_f]]
-    out = H / "nick_tcost_2026-09-30.csv"
+        items += [(F, th, g, a.select) for _, th, g in rows[: a.per_f]]
+    out = H / a.out
     keys = ["f", "theta", "epsilon", "ok", "N_D", "n_T3", "n_L4", "n_R_syl",
             "n_R_resid", "n_R", "Tcost"]
     with open(out, "w", newline="") as fh, Pool(a.procs) as pool:

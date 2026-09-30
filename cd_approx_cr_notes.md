@@ -2,6 +2,15 @@
 
 *Started 2026-09-29. Status: living notes. Sections marked **[heuristic]** still need a rigorous version.*
 
+
+> **STATUS (2026-09-30).** These notes are a chronological working log. **Current numbers live in `cd_ft_cost_results_2026-09-30.md`, the summary of record.** Blocks marked ⚠ SUPERSEDED keep their original text for history only. Current values:
+> - R = 7 T and level-4 = 7 T, each with one clean ancilla, both optimal with one ancilla.
+> - C+D T-cost = 16.6 + 10.0·log₃(1/ε), ≈227 T at 10⁻¹⁰, against C+R with R built from 7 T ≈ 776 (3.4×).
+> - N_D (corrected) = 3.94 + 5.16·log₃(1/ε).
+> - An R-state factory gives c_R/c_T ≥ 16.
+> - T-cost-aware prefix selection is a null result.
+> - RUS does not break the tie.
+
 ---
 
 ## 1. The result
@@ -279,7 +288,7 @@ All of these fail for the same reason: any extra points live in the shadow direc
       - With H = F/(i√3), det H = 1, so every element of that group has det ∈ μ₉. That excludes −I and ζ^k R, but not −ζ^k R. So the determinant does not settle the question.
     - Evidence, not proof. A proof might adapt Glaudell's adjoint-representation argument.
   - **Consequence.**
-    - On a D-native machine, R is available from D states at ~20–39 D per R. A C+R circuit of about 105 R therefore costs about 2,000–4,000 D-states.
+    - ⚠ SUPERSEDED (R = 7 T; see results file §3).     - On a D-native machine, R is available from D states at ~20–39 D per R. A C+R circuit of about 105 R therefore costs about 2,000–4,000 D-states.
     - On an R-native (metaplectic) machine the reverse holds.
 
 ---
@@ -419,6 +428,8 @@ Total cost = Σ over gate types of (count per synthesized gate) × (device cost 
    C+D wins unless 39 c_T + 16 c_L4 > 98 c_R. Since c_R carries a ~3× RUS injection overhead on top of an indirect distillation chain, this looks robust. **The one real unknown is c_L4.**
 2. **Make R from D with an ancilla.** *(PI's preferred option.)*
 
+   ⚠ SUPERSEDED as the recommended R: 9 level-4 gates at 7 T each is far worse than R = 7 T directly (results file §3).
+
    **New, verified 2026-09-29:** R costs **9 level-4 D gates + Cliffords, with one clean |0⟩ ancilla. It is deterministic, exact and unitary.**
    - Construction:
      - GRVY's |2⟩-controlled(−τ₁₂) (2202.09235) applied to an ancilla in |0⟩ gives R ⊗ |0⟩, because τ₁₂|0⟩ = |0⟩.
@@ -442,18 +453,20 @@ Total cost = Σ over gate types of (count per synthesized gate) × (device cost 
 - **What does work: exact multi-qutrit Clifford+T synthesis.**
   - Any unitary over Z[1/3, ζ₉] is exactly Clifford+T given ≤2 ancillas (2405.08136; Kalra et al. 2405.08147).
   - An ancilla-free |2⟩-controlled-ζ construction (Yeh–vdW 2204.00552, Cor. 4) gives diag(1,1,ζ) exactly.
-  - **No optimized T-count is published.** The agent's rough tally is ~100–200 T (unverified). A ZX-optimized circuit at ~20–40 T is "plausible".
+  - ⚠ SUPERSEDED (level-4 = 7 T).   - **No optimized T-count is published.** The agent's rough tally is ~100–200 T (unverified). A ZX-optimized circuit at ~20–40 T is "plausible".
 - **A no-go (agent's own, not independently checked):** CX, X and diagonal Clifford/T gadgets with basis-state ancillas cannot produce diag(1,1,ζ). Non-diagonal pieces are needed.
 - **Catalytic identity (agent's own):** diag(1,1,ζ) = C₂(X·diag(1,1,ω)) acting on a reusable level-3 catalyst. But C₂(Λ) is itself level 4, so the catalyst does not lower the level.
 - **Qubit calibration:** √T/T ≈ 2–3× with dedicated QRM distillation (Landahl–Cesare 31-to-1 vs 15-to-1). Catalyst routes run ~10–30×.
 
 **Consequences.**
 - ~~c_L4 ≈ 100–200 T~~ superseded: c_L4 ≤ 8 T (see RESULT below).
-- **The 9-level-4 R construction is then ~900–1800 T, much worse than the 24-T clean-ancilla construction.** For R on a C+D device, use **24 T + 1 clean ancilla** unless c_L4 < 24/9 ≈ 2.7 c_T.
+- ⚠ SUPERSEDED (R = 7 T, level-4 = 7 T). - **The 9-level-4 R construction is then ~900–1800 T, much worse than the 24-T clean-ancilla construction.** For R on a C+D device, use **24 T + 1 clean ancilla** unless c_L4 < 24/9 ≈ 2.7 c_T.
 - **The C+D device is effectively a C+T device plus level-4 synthesis.** Per rotation: 39 T-type + 16 level-4 (at ~c_L4 each) + 7 R (at 24 T each) ≈ 39 + 16·c_L4 + 168 T-equivalents. The C+R device pays 105 c_R.
 - **Next checks:**
   1. ~~Can synthesis avoid level-4 syllables?~~ **No** (`nick_test/no_l4_test.py`, f = 10, 10 matrices). With the prefix table restricted to level-3 or Clifford diagonals, 0/10 decompose, whether or not R is allowed; peeling stalls at the first step. The baseline gets 10/10. So Nick's approximants need level-4 gates as well as R. Heuristic, not proven: they lie outside single-qutrit C+T. Avoiding level-4 would need a *different approximation stage* that only produces single-qutrit C+T elements; its density cost is unknown.
   2. Find the true minimal T-count of diag(1,1,ζ₉) with ancilla (ZX-style search).
+
+⚠ SUPERSEDED by the 7-T results below (8 → 7 for level-4; 24 → 7 for R). Kept for the construction history.
 
 **RESULT (2026-09-29, verified): c_L4 ≤ 8 T with one clean ancilla** (`unified/level4/l4_from_8T.py`). This supersedes the "100–200 T" estimate above.
 - **Construction.**
@@ -510,6 +523,7 @@ Total cost = Σ over gate types of (count per synthesized gate) × (device cost 
   - With 2 ancillas: no circuit ≤6 T, under the invariant-merged search (caveat: merging could in principle hide solutions).
 - **diag(1,1,ζ): 7 T** (60 gates). No meet at ≤6 with 1 ancilla (merged search, same caveat). A merge-free check has been requested.
 - **Independent verification.** I re-implemented the gate set (S = diag(1,1,ω), Z = diag(1,ω,ω²), H ∝ F) and parsed the published gate lists. Both circuits reproduce the targets to 1e-15, with the ancilla returned to |0⟩.
+- ⚠ The per-rotation numbers in this block predate the residual-R recount. Current values are in results file §4 (≈227 T at 10⁻¹⁰).
 - **Previous best:** R 39 T with a borrowed ancilla (GRVY) / 24 T with a clean ancilla; level-4 8 T. **The R result appears to be new.**
 - **Updated gadget costs:** T-type 1 T, **level-4 7 T, R 7 T**. From Nick's syllable counts (residual R still missing, recount running):
   - f = 14: 38.8 + 7·16.3 + 7·7.2 ≈ **203 T** per rotation (was 341).

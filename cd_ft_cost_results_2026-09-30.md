@@ -64,6 +64,28 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
 - **The C+D device is in effect a qutrit Clifford+T device with one reusable clean ancilla.** It needs only T-state factories, which exist (qutrit Reed–Muller, Prakash–Saha).
 - Metaplectic/anyon hardware is dropped as too far out. Both devices are generic qutrit stabilizer-code machines.
 
+**Factory-level c_R/c_T** (`factory_model/`, 2026-09-30; raw injected states per logical gate, perfect Cliffords, depolarising raw error p):
+
+| R source | c_R/c_T | Dominated by |
+|---|---|---|
+| Golay strange-state factory (Prakash 2003.02717), as published | 3×10⁴ – 6×10⁸ | 1/1728 postselection per round |
+| Same, optimistic (all syndromes usable) | 16 – 180 | 32 strange states per R-state × 3 R-states per R (RUS) |
+| [[5,1,3]]₃ route (Anwar–Campbell–Browne) | ≥10²⁵ | linear suppression only |
+| R-state from P9/T by RUS (BRS) | ≈20–27 | 27/4–9 T per state × 3 |
+| **R = 7 T (ours)** | **7 exactly (~8–9 smoothed)** | deterministic |
+
+- T via QRM₃(2) 8→1 was rebuilt exactly: ε' = 2.0ε², threshold 0.211 (matches CAB). Injection is deterministic.
+- All conversion and injection steps for R use only Cliffords, stabilizer measurements and postselection. There is no hidden non-Clifford cost.
+- **Conclusion.** Every modelled regime (p = 1e-2…1e-4, per-gate targets 1e-6…1e-12) is far above the c_R ≳ 2 c_T break-even. So **C+D beats C+R-with-an-R-factory robustly**, and a C+R device should itself make R from 7 T, which gives the 3.4× C+D advantage above.
+- Structural reason: R is transversal on no stabilizer code, so it cannot have an efficient direct factory.
+- **Caveats:** a smarter Golay decoder is untested; the Prakash–Saha error coefficient is assumed; no published qudit factory space-time estimates exist, so the volume numbers are assumptions.
+
+**T-cost-aware exact synthesis does nothing (2026-09-30, null result).**
+- Setup: `canonical_reducer.set_selection_cost("tcost")` chooses among sde-reducing prefixes by T-cost instead of per-phase D-count (`nick_test/nick_tcost_select-tcost_2026-09-30.csv`, all 900 matrices).
+- T-cost 16.55 + 10.02·log₃ (vs 16.61 + 10.02). Per-f means differ by ≤0.1%, with 0–4% of matrices changing either way.
+- n_L4 and n_R are identical at every f. Only N_D rises (+2 to +6), because phase-equivalent swaps are free in T-cost.
+- **Interpretation:** for a fixed matrix the non-Clifford content of the canonical peel is essentially forced. T-cost is a property of the *matrix*, so the only lever is choosing a different approximant (§5, candidate selection).
+
 ## 5. Synthesis-side findings
 - **Bug in `hrsa/canonical_reducer.py` `classify_monomial_and_d_cost`.** It hard-coded the residual R to 0. A trailing monomial with mixed entry signs needs one R, because a Clifford monomial has uniform signs.
   - This affected 76% of HRSA candidates and averages 0.7 R per rotation on Nick's f = 10 circuits.
@@ -89,6 +111,6 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
 1. ~~Re-report Nick's N_D and T-costs with the fixed reducer~~ Done; see §4.
 2. Add T-cost selection to Nick's and zeta9's final candidate selection, with the `111` pre-screen.
 3. Whether R or level-4 can be done in ≤6 T with 2 ancillas (level-4: ≥6 rigorous).
-4. A real distillation-factory cost comparison: T-state vs R-state factories, at a given physical error rate.
+4. ~~Factory cost comparison~~ Done (§4). c_R/c_T ≥ 16 (optimistic) up to 10⁸ for R factories; 7 via R = 7 T.
 5. Unify the paper's convention: the draft's unsigned C+D (no R, and eq. (37) charges no R) vs Kalra's signed set used in the code. Fix the draft error at l.606.
 6. Clean up Nick's repository sync: local `zeta9` has been pulled to eaa8068, and the local edit is saved in a `git stash`.

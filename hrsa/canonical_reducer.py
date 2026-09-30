@@ -726,11 +726,15 @@ def count_d_from_syllable(a1: int, a2: int, a3: int, eps: int) -> int:
 # ---------------------------------------------------------------------------
 
 class PrefixEntry:
-    __slots__ = ("P", "d", "a1", "a2", "a3", "eps", "delta")
+    __slots__ = ("P", "d", "k", "a1", "a2", "a3", "eps", "delta")
 
-    def __init__(self, P, d, a1, a2, a3, eps, delta):
+    def __init__(self, P, d, a1, a2, a3, eps, delta, k=None):
         self.P = P
         self.d = d
+        # Selection key used to choose among sde-reducing prefixes.  Equal to
+        # the per-phase D-cost d by default; set_selection_cost("tcost")
+        # switches it to fault-tolerant T-cost (see prefix_tcost).
+        self.k = d if k is None else k
         self.a1 = a1
         self.a2 = a2
         self.a3 = a3
@@ -739,6 +743,34 @@ class PrefixEntry:
 
 
 _PREFIX_TABLE_CACHE: list[PrefixEntry] | None = None
+
+# Prefix-selection cost (2026-09-30).  "d": per-phase D-count (original
+# behaviour).  "tcost": T-cost on a qutrit T-factory device with one clean
+# ancilla: T-type (level-3) syllable diagonal = 1 T, level-4 diagonal = w4 T,
+# R = wr T (7-T gadgets: unified/r_from_d/verify_R7T.py,
+# unified/level4/l4_7T_verify.py).  Only the CHOICE among equally-valid
+# prefixes changes; D_count is still accumulated from d.
+_SELECTION = {"mode": "d", "w4": 7, "wr": 7}
+
+
+def prefix_tcost(a1: int, a2: int, a3: int, eps: int,
+                 w4: int = 7, wr: int = 7) -> int:
+    """T-cost of H·Diag(ξ^a1, ξ^a2, ξ^a3)·R^eps·X^delta."""
+    t = 0
+    if a1 % 3 or a2 % 3 or a3 % 3:
+        t += 1 if (a1 + a2 + a3) % 3 == 0 else w4
+    return t + (wr if eps else 0)
+
+
+def set_selection_cost(mode: str = "d", w4: int = 7, wr: int = 7) -> None:
+    """Choose the prefix-selection cost: "d" (default) or "tcost"."""
+    global _PREFIX_TABLE_CACHE
+    if mode not in ("d", "tcost"):
+        raise ValueError(f"unknown selection mode {mode!r}")
+    _SELECTION.update(mode=mode, w4=w4, wr=wr)
+    if _PREFIX_TABLE_CACHE is not None:
+        for e in _PREFIX_TABLE_CACHE:
+            e.k = e.d if mode == "d" else prefix_tcost(e.a1, e.a2, e.a3, e.eps, w4, wr)
 
 
 def _build_prefix(a1: int, a2: int, a3: int, eps: int, delta: int,
@@ -770,7 +802,9 @@ def get_prefix_table() -> list[PrefixEntry]:
                     for a3 in range(9):
                         P = _build_prefix(a1, a2, a3, eps, delta, H, R, X)
                         d = count_d_from_syllable(a1, a2, a3, eps)
-                        tbl.append(PrefixEntry(P, d, a1, a2, a3, eps, delta))
+                        k = d if _SELECTION["mode"] == "d" else prefix_tcost(
+                            a1, a2, a3, eps, _SELECTION["w4"], _SELECTION["wr"])
+                        tbl.append(PrefixEntry(P, d, a1, a2, a3, eps, delta, k))
     _PREFIX_TABLE_CACHE = tbl
     return tbl
 
@@ -982,7 +1016,7 @@ def _try_single_prefix(V, s: int, table: list[PrefixEntry],
         # iteration is cheaper).
         best_drop = 0
     for idx, e in enumerate(table):
-        if e.d > best_d:
+        if e.k > best_d:
             continue
         new00 = _prefix_times_V_00(e.P, V)
         new_s = sde_chi_full(new00)
@@ -990,16 +1024,16 @@ def _try_single_prefix(V, s: int, table: list[PrefixEntry],
             if new_s >= s:
                 continue
             drop = s - new_s
-            if e.d < best_d or (e.d == best_d and drop > best_drop):
-                best_d = e.d
+            if e.k < best_d or (e.k == best_d and drop > best_drop):
+                best_d = e.k
                 best_drop = drop
                 best_idx = idx
                 if best_d == 0 and best_drop >= 6:
                     break  # cheap, deep — almost certainly optimal
         else:
             if new_s == s - 1:
-                if e.d < best_d:
-                    best_d = e.d
+                if e.k < best_d:
+                    best_d = e.k
                     best_idx = idx
                     if best_d == 0:
                         break
@@ -1032,7 +1066,7 @@ def _try_double_prefix(V, s: int, table: list[PrefixEntry],
     # No need; we access V[m][0] directly inside.
 
     for idx1, e1 in enumerate(table):
-        if e1.d >= best_total_d:
+        if e1.k >= best_total_d:
             continue
         mid00 = _prefix_times_V_00(e1.P, V)
         mid_s = sde_chi_full(mid00)
@@ -1049,7 +1083,7 @@ def _try_double_prefix(V, s: int, table: list[PrefixEntry],
                     acc = acc + P1[k][m] * V[m][0]
             mid_col[k] = acc
         for idx2, e2 in enumerate(table):
-            if e1.d + e2.d >= best_total_d:
+            if e1.k + e2.k >= best_total_d:
                 continue
             P2 = e2.P
             # (P2 · midV)[0][0] = sum_k P2[0][k] · midV[k][0] = sum_k P2[0][k] · mid_col[k]
@@ -1059,7 +1093,7 @@ def _try_double_prefix(V, s: int, table: list[PrefixEntry],
                     new00 = new00 + P2[0][k] * mid_col[k]
             new_s = sde_chi_full(new00)
             if new_s < s:
-                best_total_d = e1.d + e2.d
+                best_total_d = e1.k + e2.k
                 best_new_s = new_s
                 best_mid_s = mid_s
                 best_idx1 = idx1
