@@ -255,6 +255,8 @@ if __name__ == "__main__":
     f, rows = parse_fits_file(_UNIFIED / "nick_test" / f"fits_f={a.f}.txt")
     for _, th, g in rows[: a.n]:
         res = compile_matrix(build_ring(g, f), a.select)
+        assert res["err"] < 1e-9, f"circuit does not reproduce V (err {res['err']:.1e})"
+        assert res["tcount"] == res["formula_tcost"], "emitted T-count != T-cost formula"
         tgt = np.diag([np.exp(-1j * th / 2), np.exp(1j * th / 2), 1])
         eps = np.linalg.norm(ring_to_complex(build_ring(g, f)) - tgt)
         print(f"f={f} θ={th:.4f} ε={eps:.2e}  gates={res['n_gates']:5d}  T-count={res['tcount']:4d} "
