@@ -9,7 +9,11 @@ This bundle collects every result from the 2026-09-29 → 10-01 work, with the c
 | Per-phase gate count, convention A (R charged) | 3.94 + **5.16**·log₃(1/ε) | Householder 5.14, Exhaustive 4.11 ·log₃(1/ε) |
 | Per-phase gate count, convention B (R free) | 2.94 + **4.82**·log₃(1/ε) | same |
 | **Fault-tolerant T-cost per rotation** (qutrit T-factory machine) | 16.6 + **10.0**·log₃(1/ε) → **~227 T at 10⁻¹⁰** | R built from 7 T: ~776 (Householder) / ~619 (Exhaustive) at 10⁻¹⁰ → **C+D 3.4× / 2.7× cheaper** |
+| **T-cost, measurement model** (level-4 = R = 4 T, both sides) | 9.7 + **6.58**·log₃(1/ε) → **~148 T at 10⁻¹⁰** | R = 4 T: ~444 / ~354 → **C+D 3.0× / 2.4× cheaper** |
 
+- **Gadget costs:**
+  - unitary model: R = level-4 = **7 T**, optimal for any number of clean ancillas;
+  - measurement + Clifford feed-forward: **4 T** each, optimal within the searched classes.
 - **Per-phase gate count:** the tie under A is the old "C+D ≈ C+R" result.
 - **T-cost:** the robust comparison. It does not depend on the A/B choice, because the 7 R per rotation are paid in T either way.
 
@@ -23,6 +27,7 @@ This bundle collects every result from the 2026-09-29 → 10-01 work, with the c
 | `04_fault_tolerant_cost.md` | T-cost per rotation, the device comparison, factory model (c_R/c_T) |
 | `05_qutrit_vs_two_qubits.md` | Qutrit vs two-qubit emulation in consistent units (retracts the old 1.37×) |
 | `06_synthesis_findings.md` | Residual-R bug, candidate selection by T-cost, null results, the "111" predictor, Euler merging |
+| `tables_generated_measurement_w4-4_wr-4.md` | Same tables in the measurement model (`compute_tables.py --w4 4 --wr 4`) |
 | `07_open_items.md` | What's open, and the request to Nick |
 | `tables_generated.md` | All numeric tables, written by `compute_tables.py` (don't hand-edit) |
 | `compute_tables.py` | Recomputes every table from `nick_test/nick_tcost_2026-09-30.csv` and the published fits. `--w4/--wr` change the gadget weights |

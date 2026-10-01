@@ -1,0 +1,47 @@
+{
+ "name": "L = diag(1,1,zeta), 4 T, 1 ancilla, measurement-based uncompute (level4/l4_meas_uncompute.py)",
+ "gates": [
+  "H1",
+  "X0",
+  "X1",
+  "Xdg1",
+  "T1",
+  "X1",
+  "SUM01",
+  "Xdg1",
+  "T1",
+  "X1",
+  "SUM01",
+  "Xdg1",
+  "T1",
+  "X1",
+  "SUM01",
+  "Xdg0",
+  "Xdg1",
+  "Hdg1",
+  "T1"
+ ],
+ "target_exponents": [
+  0,
+  0,
+  1
+ ],
+ "measure_basis": "fourier",
+ "correction_exponents": {
+  "0": [
+   0,
+   0,
+   0
+  ],
+  "1": [
+   0,
+   0,
+   1
+  ],
+  "2": [
+   0,
+   0,
+   2
+  ]
+ }
+}

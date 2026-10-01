@@ -1,0 +1,7 @@
+gadget: L = diag(1,1,zeta), 4 T, 1 ancilla, measurement-based uncompute (level4/l4_meas_uncompute.py)
+  gates (19, T-count 4): H1 X0 X1 Xdg1 T1 X1 SUM01 Xdg1 T1 X1 SUM01 Xdg1 T1 X1 SUM01 Xdg0 Xdg1 Hdg1 T1
+  outcome m=0: correction diag(w^[0, 0, 0]) ; EXACT block == lambda*target : True ; |lambda|^2 = 0.333333
+  outcome m=1: correction diag(w^[0, 0, 1]) ; EXACT block == lambda*target : True ; |lambda|^2 = 0.333333
+  outcome m=2: correction diag(w^[0, 0, 2]) ; EXACT block == lambda*target : True ; |lambda|^2 = 0.333333
+  numeric: outcome probabilities [0.333333 0.333333 0.333333] (state independent), max residual over 300 states x 3 outcomes 6.4e-16
+  RESULT: PASS (deterministic, Clifford feed-forward)

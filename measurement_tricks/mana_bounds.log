@@ -1,0 +1,4 @@
+M(T|+>) = 0.461377   (sanity: stabilizer |0> has M = 0.0e+00)
+R = diag(1,1,-1)           max_s M(G|s>) = 0.367725 -> t >= 0.7970;  M(Choi) = 0.367725 -> t >= 0.7970
+L = diag(1,1,zeta)         max_s M(G|s>) = 0.329906 -> t >= 0.7150;  M(Choi) = 0.329906 -> t >= 0.7150
+T (sanity, must give 1)    max_s M(G|s>) = 0.461377 -> t >= 1.0000;  M(Choi) = 0.461377 -> t >= 1.0000

@@ -43,3 +43,16 @@ Raw injected states per logical gate: perfect Cliffords, depolarising raw error 
 - The space-time volume of factories is not modelled beyond raw-state counts. No published qudit factory volume estimates exist.
 - The Prakash–Saha error coefficient was assumed; a smarter Golay decoder is untested.
 - The one clean ancilla is reused sequentially. Parallel rotations need one ancilla each.
+
+## UPDATE 2026-10-01: measurement model (level-4 = 4 T, R still 7 T)
+Generated with (superseded below: both gadgets 4 T).
+- **T-cost = 12.7 + 7.59·log₃(1/ε) → ~172 T at 10⁻¹⁰** (f = 14: 163; f = 16: 185).
+- **vs C+R with R = 7 T:** 4.5× (Householder) / 3.6× (Exhaustive).
+- **Break-even against an R factory:** c_R/c_T > 1.55.
+- **Provisional:** if measurement tricks also lower R, C+R built from T gets cheaper too, and the ratio has to be recomputed with the same R cost on both sides.
+
+## UPDATE 2026-10-01 (later): measurement model with level-4 = 4 T and R = 4 T (both sides)
+`python3 compute_tables.py --w4 4 --wr 4` → `tables_generated_measurement_w4-4_wr-4.md`.
+- **C+D T-cost = 9.7 + 6.58·log₃(1/ε) → ~148 T at 10⁻¹⁰** (f = 14: 139; f = 16: 160).
+- **C+R with R = 4 T:** Householder 444 / Exhaustive 354 at 10⁻¹⁰, so **C+D 3.0× / 2.4× cheaper**. The C+R side benefits from the 4-T R as well; this is the like-for-like comparison.
+- **Break-even against an R factory:** c_R/c_T > 1.33.

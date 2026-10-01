@@ -30,3 +30,12 @@ Absolute counts at 10⁻¹⁰:
 - **Per-state factory cost differs.** A qutrit T-state from QRM₃(2) 8→1 (2ε²) costs 0.28–4.3× a qubit T-state from 15→1 (35ε³) in raw states, depending on which side of a round boundary the target falls (p = 1e-3/1e-4). There is no robust direction.
 - **Modern qubit factories favour qubits.** Cultivation and Litinski's factories widen the qubit advantage, and no qutrit analogues exist.
 - **Physical footprint is not modelled.** One qutrit vs two qubits, and qutrit vs qubit code distances, are left out.
+
+## UPDATE 2026-10-01: measurement model
+With level-4 = 4 T, qutrit C+D vs **two-qubit deterministic** emulation is **1.03× at 10⁻¹⁰**, essentially parity. Against qubit RUS it is 2.18×. Qubit synthesis may also benefit from measurement tricks (e.g. measurement-based uncomputation in qubit gadgets), so compare like with like before quoting it.
+
+## UPDATE 2026-10-01 (later): measurement model with both gadgets at 4 T
+- **Qutrit C+D vs two-qubit emulation at 10⁻¹⁰:** **0.89×** vs deterministic qubit synthesis (6 × 148 = 886 T₃ vs 997 T₂), and 1.87× vs qubit RUS.
+- **Caveats:**
+  - The deterministic qubit baseline (Ross–Selinger) has no measurement tricks. Qubit synthesis with measurement-assisted gadgets would also improve, so like-for-like is not settled.
+  - Qutrit vs qubit T-state factory costs differ by 0.3–4×.

@@ -1,0 +1,5 @@
+target L: 101 orbit reps (depth<=3), depth counts [1, 2, 9, 89]
+prefilter hits 8277, full hits 4140  [164s]
+  T-count 4: best p_succ 1.000000 (deterministic hits: 219)  example (4, 0.9999999999999991, (2,), (29, np.int64(56), np.int64(27)), 1, 1, ['G', 'G', 'G'])
+  T-count 5: best p_succ 1.000000 (deterministic hits: 870)  example (5, 0.999999999999998, (2, 8), (11, np.int64(20), np.int64(18)), 3, 12, ['G', 'G', 'G'])
+  T-count 6: best p_succ 1.000000 (deterministic hits: 3051)  example (6, 0.999999999999998, (2, 10, 29), (18, np.int64(56), np.int64(27)), 3, 1, ['G', 'G', 'G'])

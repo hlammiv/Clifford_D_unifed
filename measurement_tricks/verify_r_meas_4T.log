@@ -1,0 +1,7 @@
+gadget: R = diag(1,1,-1), 4 T, 1 ancilla, measurement
+  gates (22, T-count 4): H1 T1 H1 H1 SUM01 T1 SUM01dg Sdg1 Hdg1 T1 H1 S1 H1 Xdg0 SUM01dg S1 Hdg1 T1 H1 Sdg1 SUM01 X0
+  outcome m=0: correction diag(w^[0, 0, 2]) ; EXACT block == lambda*target : True ; |lambda|^2 = 0.333333
+  outcome m=1: correction diag(w^[0, 0, 2]) ; EXACT block == lambda*target : True ; |lambda|^2 = 0.333333
+  outcome m=2: correction diag(w^[0, 2, 0]) ; EXACT block == lambda*target : True ; |lambda|^2 = 0.333333
+  numeric: outcome probabilities [0.333333 0.333333 0.333333] (state independent), max residual over 300 states x 3 outcomes 5.6e-16
+  RESULT: PASS (deterministic, Clifford feed-forward)

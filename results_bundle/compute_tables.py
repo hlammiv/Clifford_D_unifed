@@ -134,7 +134,7 @@ def main():
     p("|---|---|---|---|---|")
     for lab, fn in (("C+D T-cost (as is)", cd), ("C+D T-cost, best-of-100 (slope 8.3, extrapolated)", cd100),
                     ("*C+D per-phase N_φ (mixed units; retracted as a cost)*", nphi),
-                    ("C+R Householder, R = 7 T", crh7)):
+                    (f"C+R Householder, R = {a.wr:g} T", crh7)):
         r = lambda e, q: 6 * fn(e) / (10 * q(e))  # noqa: E731
         p(f"| {lab} | {r(1e-6, qrus):.2f} | {r(1e-10, qrus):.2f} | {r(1e-6, qdet):.2f} | {r(1e-10, qdet):.2f} |")
     p(f"\nAbsolute at 10⁻¹⁰: qutrit C+D 6 × {cd(1e-10):.0f} = {6 * cd(1e-10):.0f} T₃; "

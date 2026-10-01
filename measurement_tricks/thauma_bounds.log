@@ -1,0 +1,8 @@
+max-thauma: theta(T|+>) = 0.29810
+   R           theta(Choi) = 0.28768  ->  t >= 0.9651
+   L           theta(Choi) = 0.25706  ->  t >= 0.8623
+   T (sanity)  theta(Choi) = 0.29810  ->  t >= 1.0000
+min-thauma: theta(T|+>) = 0.29810
+   R           theta(Choi) = 0.25131  ->  t >= 0.8431
+   L           theta(Choi) = 0.10979  ->  t >= 0.3683
+   T (sanity)  theta(Choi) = 0.29810  ->  t >= 1.0000

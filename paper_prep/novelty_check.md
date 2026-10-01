@@ -82,3 +82,10 @@ Caveats to state:
 An exact search (`two_ancilla/`) rules out ≤6 T with two clean ancillas for both R and diag(1,1,ζ₉).
 
 Suggested wording: "T-count 7 is optimal among circuits using at most two clean ancillas (exhaustive search over all Clifford-conjugated T-rotation products, t ≤ 6); the general-ancilla case remains open."
+
+## Update 2026-10-01 (later): optimality with any number of ancillas
+A support-reduction plus mana argument (`three_ancilla/verify_lemmas.py`) extends the two-ancilla exclusion to any number of clean ancillas, for unitary circuits.
+
+Suggested wording: "T-count 7 is optimal for exact unitary Clifford+T circuits with any number of clean ancillas."
+
+With mid-circuit measurement and Clifford feed-forward, the level-4 gate drops to 4 T.

@@ -1,0 +1,6 @@
+C2(X) found: SUM sign 1, global phase fix (1+0j) (3 T)
+control L4 (4T, embedded): ((1, [0, 2, 8]), True)
+R: 125 orbits (depth <= 3, counts [1, 2, 10, 112]): deterministic hits []; orbits with ANY outcome = R: []
+L: 125 orbits (depth <= 3, counts [1, 2, 10, 112]): deterministic hits []; orbits with ANY outcome = L: []
+
+[exited with code 0]

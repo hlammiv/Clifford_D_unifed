@@ -13,7 +13,10 @@
 - **This confirms or refutes the slope estimate** of 10.0 → ~8.3 T per log₃ at f = 12–16.
 
 ## Open research questions
-- **Gadget optimality with ≥3 ancillas, measurement or catalysts.** ≤2 clean ancillas is settled (7 T). Three ancillas is infeasible with the current search; it would need new symmetry reduction.
+- **Gadget optimality.**
+  - Unitary: settled. 7 T for any number of clean ancillas (`three_ancilla/`).
+  - Measurement model: 4 T, optimal with ≤2 ancillas and one adaptive round. Open: ≥3 ancillas with measurement, multi-round adaptive schemes, and catalysts beyond t = 1.
+- **Which model the paper uses.** Unitary (227 T) vs measurement + feed-forward (148 T). Both are physical on a fault-tolerant machine, where measurement and feed-forward are standard. The C+D/C+R ratio is 3.4× vs 3.0× (Householder).
 - **A non-trivial analytic T-count lower bound.** Mana gives ≥1; thauma or stabilizer extent are not computed.
 - **A rigorous version of the shadow counting argument** (`02`): A(ε) for full unitaries and the density of solvable norm equations.
 - **Factory space-time volume for qutrit T-states vs qubit T-states.** It is needed for a firm qutrit-vs-qubit statement (`05`).

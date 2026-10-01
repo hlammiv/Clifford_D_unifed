@@ -1,0 +1,84 @@
+{
+ "target": "R = diag(1,1,-1)",
+ "qutrits": "0 = system, 1 = clean ancilla |0>",
+ "gates": [
+  "H1",
+  "T1",
+  "H1",
+  "H1",
+  "SUM01",
+  "T1",
+  "SUM01dg",
+  "Sdg1",
+  "Hdg1",
+  "T1",
+  "H1",
+  "S1",
+  "H1",
+  "Xdg0",
+  "SUM01dg",
+  "S1",
+  "Hdg1",
+  "T1",
+  "H1",
+  "Sdg1",
+  "SUM01",
+  "X0"
+ ],
+ "T_count": 4,
+ "rotation_paulis_(a1,b1,a2,b2)=X^a1Z^b1(x)X^a2Z^b2": [
+  [
+   0,
+   0,
+   1,
+   0
+  ],
+  [
+   0,
+   1,
+   2,
+   0
+  ],
+  [
+   0,
+   0,
+   1,
+   2
+  ],
+  [
+   0,
+   2,
+   2,
+   1
+  ]
+ ],
+ "measure": "ancilla in computational basis, outcome m",
+ "correction_on_system": {
+  "0": "diag(w^0, w^0, w^2)",
+  "1": "diag(w^0, w^0, w^2)",
+  "2": "diag(w^0, w^2, w^0)"
+ },
+ "correction_exponents": {
+  "0": [
+   0,
+   0,
+   2
+  ],
+  "1": [
+   0,
+   0,
+   2
+  ],
+  "2": [
+   0,
+   2,
+   0
+  ]
+ },
+ "name": "R = diag(1,1,-1), 4 T, 1 ancilla, measurement",
+ "target_exponents": [
+  0,
+  0,
+  "neg"
+ ]
+}
