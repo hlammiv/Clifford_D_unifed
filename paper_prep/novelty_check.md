@@ -66,3 +66,14 @@
    - Hand-count Yeh–vdW Cor. 4 at k = 1.
    - Run a Semantic Scholar or Google Scholar forward-citation sweep of 2405.08136 and 2204.13681. These were rate-limited in this pass.
    - Look for any 2026 qutrit ZX/T-count optimization preprint, e.g. a PyZX-qudit or qutrit-ZX T-count reduction paper, that may have rediscovered a small R circuit.
+
+## Update 2026-09-30: T-count of the prior level-4 construction
+A direct count of Yeh–van de Wetering arXiv:2204.00552 Cor. 4 at k=1 gives **224 T with 2 borrowed qutrits** (script `level4/novelty/yeh_vdw_cor4_tcount.py`, exact matrix check). Breakdown: |2>-ctrl S† 8 T; |22>-ctrl X01 51 T; |22>-ctrl X 108 T; |2>-ctrl Z(0,1) 216 T; total 216 + 8.
+
+No paper states any explicit T-count for diag(1,1,ζ₉).
+
+Suggested wording: "To our knowledge, this is the first explicit T-count for an exact Clifford+T implementation of diag(1,1,ζ₉). Prior constructions (2204.00552 Cor. 4; 2405.08136 Lemma A.[w2]) establish existence with borrowed ancillae but state no T-count; a direct count of the former gives 224 T."
+
+Caveats to state:
+- The compute/phase/uncompute kickback gadget itself is standard.
+- Optimality rests on our exhaustive search (l4_orbits.py): 2-qutrit Clifford group, ancilla returned to |0>.

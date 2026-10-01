@@ -94,6 +94,12 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
   - Within 10% of the best frob, the minimum T-cost is 36–61% lower than the frob-best candidate's.
   - Over all ε-passing candidates it is 2–6× below HRSA_bestD's min-N_D pick. The min-N_D picks are R-heavy (R-light words are longer in N_D).
   - R = 0 candidates exist: 5.6% at ε = 1e-2 and 11% at ε = 0.1.
+- **Selection at tighter ε** (`tcost_selection_study/`, ε down to 0.003, thousands of HRSA candidates per angle):
+  - Within-angle T-cost spread = 1.03–1.14× the cross-angle spread, so the assumption holds.
+  - Best-of-10 saves ~27%, best-of-100 ~42%, best-of-1000 ~57% (one angle).
+  - Pools are large (27k candidates per angle at f = 3).
+  - **Extrapolated T-cost slope: 10.0 → ≈9.0 (K = 10), ≈8.3 (K = 100), ≈7.8 (K = 1000) per log₃(1/ε).** That is ~180 T at 10⁻¹⁰ for K = 100.
+  - Confirming at f = 12–16 needs top-K dumps from Nick's pipeline.
 - **Cheap predictor (empirical, 900/900).** Take the leading χ-adic digit of each column-0 numerator, up to global sign. Class `111` means no bookend R. Mixed classes need ≥2 R. Class `111` is necessary for R = 0.
 - **Global phase** (−V, ζV) never changes the R count.
 - **Euler merging** (several R_z's multiplied, then re-reduced) saves only ~1.3% (ratio 0.987). Dead.
@@ -109,7 +115,7 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
 
 ## 7. Open items
 1. ~~Re-report Nick's N_D and T-costs with the fixed reducer~~ Done; see §4.
-2. Add T-cost selection to Nick's and zeta9's final candidate selection, with the `111` pre-screen.
+2. Add T-cost selection to Nick's and zeta9's final candidate selection, with the `111` pre-screen. **Ask Nick to dump the top-K candidates per θ** (see `paper_prep/README.md`, request to Nick).
 3. Whether R or level-4 can be done in ≤6 T with 2 ancillas (level-4: ≥6 rigorous).
 4. ~~Factory cost comparison~~ Done (§4). c_R/c_T ≥ 16 (optimistic) up to 10⁸ for R factories; 7 via R = 7 T.
 5. Unify the paper's convention: the draft's unsigned C+D (no R, and eq. (37) charges no R) vs Kalra's signed set used in the code. Fix the draft error at l.606.
