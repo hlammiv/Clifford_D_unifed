@@ -1,11 +1,12 @@
 # 07: Open items
 
-## Decisions (PI)
-1. **Counting convention:** A (signed, R charged) vs B (unsigned, R free). See `01`. The recommendation is A, with per-class counts plus T-cost as the headline. Deferred for now; both are reported.
-2. **Draft corrections:** 15 patches in `paper_prep/draft_corrections.md`. l.606 is required; others include l.584, l.586, l.329, Algorithm 6 and eq. (37). Apply them once the convention is chosen.
-3. **Whether the 7-T gadgets become a standalone short note or an appendix** (`03`).
+## Decisions (PI): resolved 2026-10-01
+- Convention: **A**.
+- Cost models: **report both**, unitary (7-T gadgets) and measurement (4-T gadgets).
+- Draft corrections: **tabled**. A new document will likely be built from this bundle.
+- The gadgets go **into this paper**.
 
-## Waiting on Nick
+## Waiting on Nick (request sent 2026-10-01)
 - **Top-K candidates per θ** (frob ≤ 1.25 × best, up to K = 100–1000). The package is `nick_request/` (`INSTRUCTIONS_for_Nick.md`, `topk_dump.patch`, also zipped as `nick_stuff.zip`).
   - At f ≥ 6 his current pools have no near-neighbours, so he needs a larger `--top_n`.
   - Size: ~40 MB for 150 θ × 7 f × K = 100.

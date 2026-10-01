@@ -1,6 +1,6 @@
 # Qutrit Clifford+D vs Clifford+R: results bundle (2026-10-01)
 
-This bundle collects every result from the 2026-09-29 → 10-01 work, with the code to recompute it. **The counting convention is not decided yet.** Results that depend on it are given under both conventions, A and B, defined in `01`.
+This bundle collects every result from the 2026-09-29 → 10-01 work, with the code to recompute it. **Convention A (signed, R charged) is adopted** (decision 2026-10-01, below). Convention B is shown in `01` for comparison only.
 
 ## Headline
 
@@ -16,6 +16,15 @@ This bundle collects every result from the 2026-09-29 → 10-01 work, with the c
   - measurement + Clifford feed-forward: **4 T** each, optimal within the searched classes.
 - **Per-phase gate count:** the tie under A is the old "C+D ≈ C+R" result.
 - **T-cost:** the robust comparison. It does not depend on the A/B choice, because the 7 R per rotation are paid in T either way.
+
+## Decisions (PI, 2026-10-01)
+1. **Counting convention: A (signed 𝒟, R ∈ C+D, R charged).** Report the per-class counts (n_T, n_4, n_R) as the primary data, with T-cost as the headline. N_φ (per-phase, R charged) is kept only for comparison with the literature. Convention B appears only to explain why the draft's numbers differ.
+2. **Cost models: report both.**
+   - Unitary gadgets (level-4 = R = 7 T, optimal for any number of clean ancillas): ~227 T at 10⁻¹⁰, 3.4× / 2.7× cheaper than C+R.
+   - Measurement + Clifford feed-forward gadgets (4 T each): ~148 T at 10⁻¹⁰, 3.0× / 2.4× cheaper than C+R with R = 4 T.
+3. **Draft corrections: tabled.** A new document will probably be written using this bundle as its base, rather than patching `ESA_CliffordD_fixed.tex`. `paper_prep/draft_corrections.md` stays as a reference list of errors not to repeat.
+4. **The 7-T and 4-T gadgets go into this paper,** not a separate note.
+5. **Nick:** request sent 2026-10-01; awaiting the top-K dump.
 
 ## Files
 
