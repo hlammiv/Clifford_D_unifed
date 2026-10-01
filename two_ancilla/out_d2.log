@@ -1,0 +1,12 @@
+[fwd] depth 1: 3 child hash-buckets, 2 new orbits (total 3)  [4s]  margin 5.69e-02
+[fwd] depth 2: 9 child hash-buckets, 10 new orbits (total 13)  [27s]  margin 3.66e-02
+[bwd L4k1] depth 1: 3 child hash-buckets, 2 new orbits (total 3)  [31s]  margin 1.28e-03
+[bwd L4k1] depth 2: 14 child hash-buckets, 14 new orbits (total 17)  [52s]  margin 3.05e-04
+== L4k1: 0 bwd orbits share a hash bucket with fwd orbits; exact meets: 0
+   NO exact meet: T-count > 4 with two clean ancillas
+   [52s] margin 3.05e-04 equiv stats {'maps': 0, 'tests': 0}
+[bwd R] depth 1: 4 child hash-buckets, 3 new orbits (total 4)  [56s]  margin 3.05e-04
+[bwd R] depth 2: 15 child hash-buckets, 17 new orbits (total 21)  [80s]  margin 3.05e-04
+== R: 0 bwd orbits share a hash bucket with fwd orbits; exact meets: 0
+   NO exact meet: T-count > 4 with two clean ancillas
+   [80s] margin 3.05e-04 equiv stats {'maps': 0, 'tests': 0}

@@ -1,0 +1,556 @@
+From 853a8da7552831af4123d212efa7b8c76ecfdf0b Mon Sep 17 00:00:00 2001
+From: Henry Lamm <hanklammiv@gmail.com>
+Date: Thu, 1 Oct 2026 09:16:07 -0500
+Subject: [PATCH] Optional top-K candidate dump (--topk K --tol T)
+
+fit_theta_all_best_one_theta.py: new flags --topk (default 0 = unchanged
+behaviour), --tol, --topk_vec_slack, --topk_txt, --topk_format
+{matrix,vector}, --topk_append.  Pass 2 enumerates all root combinations
+within (tol*slack)*best vector distance, ranks them by the true matrix
+Frobenius distance to R_z(theta), dedups identical exact matrices, keeps
+frob <= tol*best (at most K) and writes them in the fits_f=N.txt format
+plus ", frob , rank" (also <prefix>.theta_topk.npz).
+
+dump_special_thetas.py: --topk K [--tol T --fs 4,6,...] post-processes the
+existing out.phase_free_special_theta.npz: ranks every stored matrix against
+each special theta and writes fits_topk_f=N.txt.  No flags = old behaviour.
+
+tools.py: householder_int_matrix() exact integer 3^e*V (no Sage parsing).
+run_topk: theta-list driver.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014FedAKYYRYSKM3qqjGypvy
+---
+ dump_special_thetas.py                |  93 ++++++++++-
+ run_topk                              |  37 +++++
+ zeta9/fit_theta_all_best_one_theta.py | 224 +++++++++++++++++++++++++-
+ zeta9/tools.py                        |  31 ++++
+ 4 files changed, 379 insertions(+), 6 deletions(-)
+ create mode 100755 run_topk
+
+diff --git a/dump_special_thetas.py b/dump_special_thetas.py
+index a42efb0..893ce49 100644
+--- a/dump_special_thetas.py
++++ b/dump_special_thetas.py
+@@ -1,7 +1,7 @@
+ import sys, shutil, os
+ import numpy as np
+ import glob
+-from zeta9.tools import vector_coeffs_to_complex, parse_fixed_row1_sage, z9_norm_m012
++from zeta9.tools import vector_coeffs_to_complex, parse_fixed_row1_sage, z9_norm_m012, householder_int_matrix
+ from sage.all import CyclotomicField, Matrix, vector, identity_matrix, ZZ
+ 
+ 
+@@ -247,7 +247,96 @@ def DumpMatrix(nout=1000, lab="1e-4", f=8, norm="V", mod=""):
+ #
+ 
+ 
+-if(1):
++def DumpTopK(k=100, tol=1.25, lab="1e-4", f=8, norm="V", mod="", nout=0, out=None):
++    """Top-K variant of Dump().
++
++    Dump() writes, for each special theta, the one matrix that generated it.
++    DumpTopK() additionally ranks EVERY matrix stored in
++    out.phase_free_special_theta.npz (all groups x all root pairs) by its raw
++    Frobenius distance to R_z(theta) = diag(e^{-i theta/2}, e^{i theta/2}, 1),
++    and writes, per theta, all matrices with frob <= tol * best (at most k),
++    sorted by frob.  Same text format as fits_f=N.txt plus two trailing columns
++    ", frob , rank".  The pool can be enlarged by re-running
++    find_phase_free_special_theta_exactdiff with a larger --top_n.
++    """
++    fname = f"D/{norm}_f={f}{mod}/eps={lab}/out.phase_free_special_theta.npz"
++    d = np.load(fname)
++    idxoff = d['theta_off']
++    theta = d['theta']
++    gc3 = d['group_coeff3']
++    coeff = np.empty((len(theta),3,6),dtype=np.int64)
++    for i in range(len(idxoff)-1):
++        i0 = idxoff[i]; i1 = idxoff[i+1]
++        coeff[i0:i1,0] = d['coeff1'][i0:i1]
++        coeff[i0:i1,1] = d['coeff2'][i0:i1]
++        coeff[i0:i1,2] = gc3[i]
++
++    # unique matrices in the pool (exact coefficient key)
++    _, uidx = np.unique(coeff.reshape(len(coeff),-1), axis=0, return_index=True)
++    pool = coeff[np.sort(uidx)]
++    X01 = np.array([[0,1,0],[1,0,0],[0,0,1]], dtype=np.complex128)
++    I = np.eye(3, dtype=np.complex128)
++    V = np.empty((len(pool),3,3), dtype=np.complex128)
++    for n in range(len(pool)):
++        x = vector_coeffs_to_complex(pool[n], f)
++        V[n] = X01 @ (I - 3**f*np.outer(np.conj(x), x))
++
++    # target thetas: the same (sorted, de-duplicated) list Dump() writes
++    th = np.sort(theta)
++    th = th[np.append([True], np.diff(th) > 1e-14)]
++    if(nout > 0):
++        th = th[::(len(th)+nout-1)//nout]
++
++    if(out is None): out = f"fits_topk_f={f}.txt"
++    nrow = 0
++    with open(out,"wt") as fh:
++        fh.write(f"#f={f}\n")
++        fh.write("# columns: theta, 3^f*Mij (3x3 6-element-groups), frob, rank\n")
++        for t in th:
++            T = np.diag([np.exp(-0.5j*t), np.exp(0.5j*t), 1.0+0.0j])
++            frob = np.linalg.norm(V - T, axis=(1,2))
++            order = np.argsort(frob, kind="mergesort")
++            cut = tol*frob[order[0]]
++            seen = set()
++            r = 0
++            for n in order:
++                if(frob[n] > cut or r >= k): break
++                M = householder_int_matrix(pool[n], f, "2/3^f")[1]   # == MatrixC6(pool[n], f), no Sage text parsing
++                key = str(M)
++                if(key in seen): continue
++                seen.add(key)
++                fh.write(f"{t}")
++                for j in range(3):
++                    for i in range(3):
++                        fh.write(" ,")
++                        for m in range(6):
++                            fh.write(f" {M[i][j][m]}")
++                fh.write(f" , {frob[n]:.17g} , {r}\n")
++                r += 1
++                nrow += 1
++    print(f"f={f}: pool={len(pool)} thetas={len(th)} rows={nrow} -> {out}")
++#
++
++
++def _topk_cli():
++    """Return parsed args if --topk was given on the command line, else None."""
++    import argparse
++    if("--topk" not in " ".join(sys.argv[1:])): return None
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--topk", type=int, required=True)
++    ap.add_argument("--tol", type=float, default=1.25)
++    ap.add_argument("--fs", type=str, default="4,6,8,10,12,14,16")
++    a, _ = ap.parse_known_args()
++    return a
++#
++
++_TOPK = _topk_cli()
++_LABS = {4:"1e-2", 6:"1e-3", 8:"1e-4", 10:"3e-6", 12:"1e-9+1e-7", 14:"3e-12+1e-8", 16:"1e-16+1e-9"}
++
++if(_TOPK is not None):
++    for _f in [int(v) for v in _TOPK.fs.split(",")]:
++        DumpTopK(k=_TOPK.topk, tol=_TOPK.tol, lab=_LABS[_f], f=_f)
++elif(1):
+     Dump(lab="1e-2",f=4)
+     Dump(lab="1e-3",f=6)
+     Dump(lab="1e-4",f=8)
+diff --git a/run_topk b/run_topk
+new file mode 100755
+index 0000000..8f192fd
+--- /dev/null
++++ b/run_topk
+@@ -0,0 +1,37 @@
++#!/usr/bin/env bash
++# Top-K candidate dump on a theta list, using fit_theta_all_best_one_theta.py.
++# Same directory conventions as plot_eps_vs_theta.py LoadMatrix() (norm "V" = 2/3^f).
++# Output: fits_topk_f=${f}.txt  (fits_f=N.txt format + trailing ", frob , rank").
++#
++#   thetas.txt : one theta per line (e.g. the first column of your fits_f=${f}.txt:
++#                grep -v '^#' fits_f=8.txt | cut -d, -f1 > thetas_f=8.txt )
++
++f="8"
++lab="1e-4"          # eps label of the D/V_f=${f}/eps=${lab} directory
++eps="1e-4"          # --eps for the candidate disks
++K=100
++tol=1.25
++thetas="thetas_f=${f}.txt"
++
++mpi="mpirun -n 16"
++dir="D/V_f=${f}/eps=${lab}"
++out="fits_topk_f=${f}.txt"
++rm -f "${out}"
++
++while read -r th; do
++  [[ -z "${th}" || "${th}" == \#* ]] && continue
++  $mpi python3 -m zeta9.fit_theta_all_best_one_theta \
++    --triples_file "${dir}/triples" \
++    --triples_json "${dir}/triples.manifest.json" \
++    --rootdb_prefix "${dir}/roots_local" \
++    --y2_good_npz "${dir}/roots_y2_good_m1.npz" \
++    --f "${f}" \
++    --norm "2/3^f" \
++    --eps "${eps}" \
++    --theta "${th}" \
++    --output_prefix "${dir}/topk_tmp" \
++    --topk ${K} --tol ${tol} \
++    --topk_txt "${out}" --topk_append \
++    --quiet
++done < "${thetas}"
++echo "wrote ${out}"
+diff --git a/zeta9/fit_theta_all_best_one_theta.py b/zeta9/fit_theta_all_best_one_theta.py
+index d5c3502..5f1a6a8 100755
+--- a/zeta9/fit_theta_all_best_one_theta.py
++++ b/zeta9/fit_theta_all_best_one_theta.py
+@@ -12,6 +12,7 @@ Only the final best-per-theta arrays are gathered to rank 0.
+ """
+ 
+ import argparse
++import heapq
+ import json
+ import math
+ import os
+@@ -22,9 +23,9 @@ import numpy as np
+ from mpi4py import MPI
+ 
+ try:
+-    from .tools import embed
++    from .tools import embed, householder_int_matrix, householder_denominator_exponent
+ except ImportError:
+-    from tools import embed
++    from tools import embed, householder_int_matrix, householder_denominator_exponent
+ 
+ C1 = math.cos(2.0 * math.pi / 9.0)
+ C2 = math.cos(4.0 * math.pi / 9.0)
+@@ -1246,7 +1247,8 @@ def _collect_best_scan_fixed_theta(*, triples_file: str, nrows: int, triples_chu
+                                    target3: complex, rank: int, size: int,
+                                    batch_cache: OrderedDict, disable_y_pruning: bool,
+                                    best_sq: float, equal_atol: float,
+-                                   max_local_solutions: int, verbose: bool):
++                                   max_local_solutions: int, verbose: bool,
++                                   topk_collector=None, topk_thr_sq: float | None = None):
+     profile = {
+         "chunks": 0,
+         "candidate_rows_loaded": 0,
+@@ -1301,6 +1303,34 @@ def _collect_best_scan_fixed_theta(*, triples_file: str, nrows: int, triples_chu
+             d1, _, coeff1 = c1
+             d2, _, coeff2 = c2
+             d3, _, coeff3 = c3
++            if topk_collector is not None:
++                # Top-K mode: enumerate every combination with vector d2 <= thr
++                # (thr >= best_sq).  Exact ties with best_sq are still recorded
++                # in the old all-best arrays, so that output is unchanged.
++                thr = float(topk_thr_sq) + equal_atol
++                Yarr = np.asarray([Y1, Y2, Y3], dtype=np.int64)
++                for i1 in range(d1.shape[0]):
++                    s1 = float(d1[i1])
++                    if s1 > thr:
++                        break
++                    for i2 in range(d2.shape[0]):
++                        s12 = s1 + float(d2[i2])
++                        if s12 > thr:
++                            break
++                        hi = int(np.searchsorted(d3, thr - s12, side="right"))
++                        for i3 in range(hi):
++                            total = s12 + float(d3[i3])
++                            cf = np.stack([coeff1[i1], coeff2[i2], coeff3[i3]], axis=0)
++                            topk_collector.offer(cf, Yarr, total, start + int(ridx))
++                            if abs(total - best_sq) <= equal_atol and not profile["truncated"]:
++                                coeff_records.append(cf)
++                                Y_records.append(Yarr)
++                                d2_records.append(np.asarray([s1, float(d2[i2]), float(d3[i3])], dtype=np.float64))
++                                row_records.append(np.asarray([start + int(ridx)], dtype=np.int64))
++                                profile["solutions_kept"] += 1
++                                if max_local_solutions > 0 and profile["solutions_kept"] >= max_local_solutions:
++                                    profile["truncated"] = True
++                continue
+             # Since each list is sorted, prune using the current partial sums.
+             for i1 in range(d1.shape[0]):
+                 s1 = float(d1[i1])
+@@ -1339,7 +1369,7 @@ def _collect_best_scan_fixed_theta(*, triples_file: str, nrows: int, triples_chu
+                     f"processed={profile['triples_processed']:,} kept={profile['solutions_kept']:,}",
+                     flush=True,
+                 )
+-        if profile["truncated"]:
++        if profile["truncated"] and topk_collector is None:
+             break
+ 
+     if coeff_records:
+@@ -1358,6 +1388,7 @@ def _collect_best_scan_fixed_theta(*, triples_file: str, nrows: int, triples_chu
+         "component_d2": component_d2,
+         "triple_row": triple_rows,
+         "profile": profile,
++        "topk": topk_collector.records() if topk_collector is not None else [],
+     }
+ 
+ 
+@@ -1374,6 +1405,130 @@ def _dedup_solution_arrays(coeffs: np.ndarray, Ys: np.ndarray, component_d2: np.
+     return coeffs[idx], Ys[idx], component_d2[idx], triple_rows[idx]
+ 
+ 
++# ============================================================
++# Optional top-K dump (--topk K --tol T).  Default --topk 0 = old behaviour.
++# ============================================================
++
++
++_householder_denominator_exponent = householder_denominator_exponent
++_householder_int_matrix = householder_int_matrix
++
++
++def _householder_matrix_frob(coeffs: np.ndarray, f: int, lam: float, theta: float) -> float:
++    """Raw Frobenius distance ||V - diag(e^{-i th/2}, e^{i th/2}, 1)||_F."""
++    u = np.asarray([coeffs_to_complex_noscale(r) for r in coeffs], dtype=np.complex128) / float(3 ** int(f))
++    V = (np.eye(3, dtype=np.complex128) - float(lam) * np.outer(np.conjugate(u), u))[[1, 0, 2], :]
++    T = np.diag([np.exp(-0.5j * float(theta)), np.exp(0.5j * float(theta)), 1.0 + 0.0j])
++    E = V - T
++    return float(math.sqrt(max(0.0, np.vdot(E, E).real)))
++
++
++class _TopKCollector:
++    """Per-rank bounded pool of the K best candidates by matrix Frobenius error.
++
++    Candidates that produce an identical exact matrix (e.g. x and a unit multiple
++    of x) are kept once.
++    """
++
++    def __init__(self, k: int, *, f: int, lam: float, theta: float, norm_label: str):
++        self._heapq = heapq
++        self.k = int(k)
++        self.f = int(f)
++        self.lam = float(lam)
++        self.theta = float(theta)
++        self.norm_label = str(norm_label)
++        self.heap = []      # (-frob, seq, key, record)
++        self.keys = set()
++        self.seq = 0
++        self.offered = 0
++
++    def offer(self, coeffs3: np.ndarray, Y3: np.ndarray, vec_d2: float, triple_row: int):
++        self.offered += 1
++        frob = _householder_matrix_frob(coeffs3, self.f, self.lam, self.theta)
++        if len(self.heap) >= self.k and frob >= -self.heap[0][0]:
++            return
++        _, N = _householder_int_matrix(coeffs3, self.f, self.norm_label)
++        key = tuple(v for row in N for ent in row for v in ent)
++        if key in self.keys:
++            return
++        rec = {
++            "frob": frob,
++            "vec_dist": math.sqrt(max(0.0, float(vec_d2))),
++            "coeffs": np.asarray(coeffs3, dtype=np.int64).copy(),
++            "Y": np.asarray(Y3, dtype=np.int64).copy(),
++            "triple_row": int(triple_row),
++            "key": key,
++        }
++        self.seq += 1
++        item = (-frob, self.seq, key, rec)
++        self.keys.add(key)
++        if len(self.heap) < self.k:
++            self._heapq.heappush(self.heap, item)
++        else:
++            old = self._heapq.heapreplace(self.heap, item)
++            self.keys.discard(old[2])
++
++    def records(self):
++        return [it[3] for it in self.heap]
++
++
++def _merge_topk_records(parts, k: int, tol: float):
++    """Merge per-rank records: dedup by exact matrix, sort by frob, keep
++    frob <= tol * best_frob, cap at k."""
++    seen = set()
++    recs = []
++    for part in parts:
++        for r in part:
++            if r["key"] in seen:
++                continue
++            seen.add(r["key"])
++            recs.append(r)
++    recs.sort(key=lambda r: (r["frob"], r["triple_row"]))
++    if not recs:
++        return []
++    cut = float(tol) * recs[0]["frob"]
++    recs = [r for r in recs if r["frob"] <= cut]
++    return recs[: int(k)]
++
++
++def _write_topk_txt(path: str, *, f: int, norm_label: str, theta: float, recs, fmt: str = "matrix",
++                    append: bool = False):
++    """Write top-K rows in the fits_f=N.txt text format plus trailing frob, rank.
++
++    matrix: theta , 9 groups of 6 ints (3^e * V_ij, same element order as
++            dump_special_thetas.py, i.e. column-major j-outer/i-inner) , frob , rank
++            with header '#f=e' (e = f for norm 2/3^f, 2f for norm 2).
++    vector: theta , 3 groups of 6 ints (3^f * x_i, Householder vector) , frob , rank
++            with header '#f=f norm=<label> vector'.
++    """
++    write_header = not (append and os.path.exists(path) and os.path.getsize(path) > 0)
++    with open(path, "a" if append else "w") as fh:
++        if write_header:
++            if fmt == "vector":
++                fh.write(f"#f={int(f)} norm={norm_label} vector\n")
++                fh.write("# columns: theta, 3^f*x_i (3 6-element-groups), frob, rank;"
++                         " V = X01 (I - lam conj(x) x^T), lam = 3^f for norm 2/3^f, 1 for norm 2\n")
++            else:
++                e = _householder_denominator_exponent(f, norm_label)
++                fh.write(f"#f={e}\n")
++                fh.write("# columns: theta, 3^f*Mij (3x3 6-element-groups), frob, rank\n")
++        for rank_i, r in enumerate(recs):
++            fh.write(f"{float(theta)}")
++            if fmt == "vector":
++                for i in range(3):
++                    fh.write(" ,")
++                    for m in range(6):
++                        fh.write(f" {int(r['coeffs'][i][m])}")
++            else:
++                _, N = _householder_int_matrix(r["coeffs"], f, norm_label)
++                for j in range(3):
++                    for i in range(3):
++                        fh.write(" ,")
++                        for m in range(6):
++                            fh.write(f" {N[i][j][m]}")
++            fh.write(f" , {r['frob']:.17g} , {rank_i}\n")
++
++
+ def fit_one_theta_all_best(
+     *,
+     triples_file: str,
+@@ -1391,6 +1546,12 @@ def fit_one_theta_all_best(
+     equal_atol: float = 1.0e-24,
+     max_solutions_per_rank: int = 0,
+     verbose: bool = False,
++    topk: int = 0,
++    tol: float = 1.25,
++    topk_vec_slack: float = 1.5,
++    topk_txt: str | None = None,
++    topk_format: str = "matrix",
++    topk_append: bool = False,
+ ):
+     comm = MPI.COMM_WORLD
+     rank = comm.Get_rank()
+@@ -1461,6 +1622,14 @@ def fit_one_theta_all_best(
+             "profile": {"solutions_kept": 0, "truncated": False},
+         }
+     else:
++        topk_collector = None
++        topk_thr_sq = None
++        if int(topk) > 0:
++            lam_h = float(3 ** int(f)) if norm_label == "2/3^f" else 1.0
++            topk_collector = _TopKCollector(int(topk), f=int(f), lam=lam_h, theta=float(theta), norm_label=norm_label)
++            # Collection window on Nick's vector distance; the final cut is on the
++            # matrix Frobenius distance (frob <= tol * best_frob).
++            topk_thr_sq = float(global_best_sq) * (float(tol) * float(topk_vec_slack)) ** 2
+         local_out = _collect_best_scan_fixed_theta(
+             triples_file=triples_file, nrows=int(nrows), triples_chunk_rows=int(triples_chunk_rows),
+             paths=paths, phase_meta=phase_meta, y2_good_keys=y2_good_keys,
+@@ -1468,6 +1637,7 @@ def fit_one_theta_all_best(
+             rank=rank, size=size, batch_cache=batch_cache,
+             disable_y_pruning=disable_y_pruning, best_sq=float(global_best_sq),
+             equal_atol=float(equal_atol), max_local_solutions=int(max_solutions_per_rank), verbose=verbose,
++            topk_collector=topk_collector, topk_thr_sq=topk_thr_sq,
+         )
+ 
+     gathered = comm.gather(local_out, root=0)
+@@ -1498,6 +1668,33 @@ def fit_one_theta_all_best(
+         target=np.asarray([[np.real(target1), np.imag(target1)], [np.real(target2), np.imag(target2)], [0.0, 0.0]], dtype=np.float64),
+     )
+ 
++    topk_summary = None
++    if int(topk) > 0:
++        recs = _merge_topk_records([g.get("topk", []) for g in gathered], int(topk), float(tol))
++        if topk_txt is None:
++            topk_txt = output_prefix + ".topk.txt"
++        _write_topk_txt(topk_txt, f=int(f), norm_label=norm_label, theta=float(theta), recs=recs,
++                        fmt=topk_format, append=bool(topk_append))
++        np.savez(
++            output_prefix + ".theta_topk.npz",
++            theta=np.asarray([float(theta)], dtype=np.float64),
++            frob=np.asarray([r["frob"] for r in recs], dtype=np.float64),
++            vec_dist=np.asarray([r["vec_dist"] for r in recs], dtype=np.float64),
++            coeffs=np.asarray([r["coeffs"] for r in recs], dtype=np.int64).reshape((-1, 3, 6)),
++            Y=np.asarray([r["Y"] for r in recs], dtype=np.int64).reshape((-1, 3, 3)),
++            triple_row=np.asarray([r["triple_row"] for r in recs], dtype=np.int64),
++        )
++        topk_summary = {
++            "topk": int(topk), "tol": float(tol), "topk_vec_slack": float(topk_vec_slack),
++            "n_written": len(recs), "txt": os.path.abspath(topk_txt), "format": topk_format,
++            "best_frob": recs[0]["frob"] if recs else None,
++            "worst_frob": recs[-1]["frob"] if recs else None,
++        }
++        if verbose:
++            print(f"top-K: wrote {len(recs)} candidates to {topk_txt}", flush=True)
++        for g in gathered:
++            g.pop("topk", None)
++
+     profile_by_rank = {str(i): {"pass1": pass1_profiles[i], "pass2": gathered[i]["profile"]} for i in range(len(gathered))}
+     summary = {
+         "mode": "fixed_theta_all_best",
+@@ -1518,6 +1715,8 @@ def fit_one_theta_all_best(
+         "truncated": bool(any(g["profile"].get("truncated", False) for g in gathered)),
+         "profile_by_rank": profile_by_rank,
+     }
++    if topk_summary is not None:
++        summary["topk"] = topk_summary
+     _write_manifest(output_prefix + ".theta_all_best.json", summary)
+     return summary
+ 
+@@ -1539,6 +1738,17 @@ if __name__ == "__main__":
+     parser.add_argument("--max_solutions_per_rank", type=int, default=0, help="Safety cap; 0 means unlimited")
+     parser.add_argument("--disable_y_pruning", action="store_true")
+     parser.add_argument("--quiet", action="store_true")
++    parser.add_argument("--topk", type=int, default=0,
++                        help="Also dump up to K candidates with matrix frob <= tol*best (0 = off, old behaviour)")
++    parser.add_argument("--tol", type=float, default=1.25, help="Top-K window: keep frob <= tol * best frob")
++    parser.add_argument("--topk_vec_slack", type=float, default=1.5,
++                        help="Search window on the vector distance is (tol*slack)*best_vector_dist")
++    parser.add_argument("--topk_txt", type=str, default=None,
++                        help="Top-K text output (default <output_prefix>.topk.txt)")
++    parser.add_argument("--topk_format", choices=["matrix", "vector"], default="matrix",
++                        help="matrix: fits_f=N.txt format (+frob, rank); vector: 18-integer Householder vector")
++    parser.add_argument("--topk_append", action="store_true",
++                        help="Append to --topk_txt (header written only if the file is new); use when looping over theta")
+     args = parser.parse_args()
+ 
+     out = fit_one_theta_all_best(
+@@ -1557,6 +1767,12 @@ if __name__ == "__main__":
+         equal_atol=args.equal_atol,
+         max_solutions_per_rank=args.max_solutions_per_rank,
+         verbose=not args.quiet,
++        topk=args.topk,
++        tol=args.tol,
++        topk_vec_slack=args.topk_vec_slack,
++        topk_txt=args.topk_txt,
++        topk_format=args.topk_format,
++        topk_append=args.topk_append,
+     )
+     if MPI.COMM_WORLD.Get_rank() == 0 and args.quiet:
+         print(out)
+diff --git a/zeta9/tools.py b/zeta9/tools.py
+index f78100a..52c8495 100755
+--- a/zeta9/tools.py
++++ b/zeta9/tools.py
+@@ -104,6 +104,37 @@ def mul(x, y):
+     return tuple(out)
+ 
+ 
++def householder_denominator_exponent(f, norm_label="2/3^f"):
++    """Exponent e such that 3^e * V has entries in Z[zeta_9], for
++    V = X01 (I - lam conj(x) x^T), x = c/3^f:
++      norm 2/3^f: lam = 3^f, 3^f V = 3^f I - conj(c) c^T      (e = f)
++      norm 2    : lam = 1,   3^(2f) V = 3^(2f) I - conj(c) c^T (e = 2f)
++    """
++    return int(f) if str(norm_label).strip() in ("2/3^f", "2/3**f") else 2 * int(f)
++
++
++def householder_int_matrix(coeffs, f, norm_label="2/3^f"):
++    """Exact integer form of the Householder-built matrix (no Sage needed).
++
++    coeffs: (3,6) integer coefficients of c = 3^f x.
++    Returns (e, N) with N a 3x3 nested list of 6-tuples of Python ints such that
++    N[i][j] = 3^e * V[i][j]; V = X01 (I - lam conj(x) x^T) (rows 0,1 swapped).
++    Same matrix as MatrixC6() in dump_special_thetas.py.
++    """
++    e = householder_denominator_exponent(f, norm_label)
++    c = [tuple(int(v) for v in coeffs[i]) for i in range(3)]
++    cc = [conj(ci) for ci in c]
++    big = 3 ** e
++    H = [[None] * 3 for _ in range(3)]
++    for i in range(3):
++        for j in range(3):
++            m = [-v for v in mul(cc[i], c[j])]
++            if i == j:
++                m[0] += big
++            H[i][j] = tuple(m)
++    return e, [H[1], H[0], H[2]]
++
++
+ def norm_to_real_subfield(x):
+     """
+     Return x * conj(x) in the same 6-coefficient basis.
+-- 
+2.43.0
+

@@ -30,9 +30,13 @@ All files live in `unified/` on branch `cd-ft-cost`.
   - whether to apply the draft corrections;
   - whether the 7-T R / level-4 results become a separate short note.
 - **For Nick:** the request below.
-- **Open:** whether R or level-4 can be done in ≤6 T with 2 ancillas (level-4 is ≥6, proven).
+- **Settled:** 7 T is optimal for R and level-4 with ≤2 clean ancillas (`two_ancilla/`).
+- **Qutrit vs two qubits** (results §4): ~1.36× vs deterministic qubit synthesis and ~2.9× vs qubit RUS, in magic-state units. The old 1.37× mixed units and is retracted.
 
 ## Request to Nick: top-K candidates per angle
+
+**Ready-to-send package: `nick_request/`.** It contains `INSTRUCTIONS_for_Nick.md` and `topk_dump.patch` (local zeta9 branch `topk-dump`, commit 853a8da; tests in `nick_request/tests/` pass). Our side is `analyze_topk.py`.
+
 **Goal.** Test T-cost-aware selection at f = 12–16 on his exact-ring pipeline. On HRSA at f ≤ 4, best-of-100 saved ~42% of the T-cost, and the extrapolated slope falls from 10.0 to ~8.3 per log₃(1/ε).
 
 **Ask.** For each θ and f he already ran, keep every exact approximant within some tolerance of the best Frobenius error, rather than only the best. Suggested tolerance: frob ≤ 1.25 × best, capped at K = 1000 per θ. Use the same text format as `fits_f=*.txt` (θ, then 9 groups of 6 integers = 3^f·M), and add one column with the achieved Frobenius distance. If it is easier, the 18-integer Householder vector x (D = X₀₁(I − 3^f x x†)) is enough, at one third of the size.

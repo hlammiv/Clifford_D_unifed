@@ -1,0 +1,3 @@
+f,rule,n_theta,mean_Tcost,mean_N_D,mean_eps,mean_log3_inv_eps
+6,best_frob,6,100,44,0.000124003,8.237
+6,min_tcost@1,6,100,44,0.000124003,8.237

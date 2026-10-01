@@ -24,6 +24,10 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
 | **R = diag(1,1,−1)** | **7** | 39 (borrowed ancilla, GRVY 2202.09235); 24 (clean ancilla) | **Optimal with 1 ancilla** (merge-free exhaustive search, ≤6 impossible). ≤6 impossible with 2 ancillas in the invariant-merged search | `r_from_d/verify_R7T.py`, `R_7T*.json`, `raw_lb_1anc.py` |
 | **Level-4 diag(1,1,ζ)** | **7** | 8 (GRVY's 8-T controlled block on a \|0⟩ ancilla, `level4/l4_from_8T.py`) | **Optimal with 1 ancilla** (exact, merge-free orbit MITM, `level4/l4_orbits.py`). ≥6 with 2 ancillas (rigorous); 6 open. Impossible with 0 ancillas (determinant argument) | `level4/l4_7T_verify.py`, `r_from_d/D4_7T*.json` |
 
+- **Two clean ancillas don't help either (2026-10-01, `two_ancilla/`).** An exact orbit meet-in-the-middle over all 728 three-qutrit T-rotations up to t = 6 finds no circuit for R or for diag(1,1,ζ^{1,2}).
+  - Orbits are merged only after an explicit Clifford pair (C, G) passes an exact matrix check. `test_equiv.py`: 30/30 positive controls; 62/62 inequivalent cases correctly separated.
+  - The only invariant collisions (one per target) are refuted by `certify.py`: the ω-class multiset of Y_P differs for all 216 single-qutrit G.
+  - **So both gates need exactly 7 T with one or two clean ancillas.** Three or more ancillas are not searched.
 - **Method:** exact meet-in-the-middle over products of Clifford-conjugated T rotations (80 two-qutrit Paulis). Isometries are compared up to a left Clifford via a Pauli-multiset invariant in exact Z[ζ] coordinates (`r_from_d/mitm_core.py`).
 - **Level-4 7-T circuit, in simple form:** `C2X ; T on ancilla ; C2X†`. The 3-T |2⟩-controlled-X writes [x=2] into the ancilla, T adds the phase ζ^[x=2], and C2X† uncomputes. Independently verified.
 - **Other constructions found along the way:**
@@ -86,6 +90,29 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
 - n_L4 and n_R are identical at every f. Only N_D rises (+2 to +6), because phase-equivalent swaps are free in T-cost.
 - **Interpretation:** for a fixed matrix the non-Clifford content of the canonical peel is essentially forced. T-cost is a property of the *matrix*, so the only lever is choosing a different approximant (§5, candidate selection).
 
+**Qutrit vs two-qubit emulation, in magic-state units (2026-10-01).** Setup as in Gustafson et al. §5:
+- an arbitrary single-qutrit gate = 6 diagonal rotations;
+- the two-qubit emulation baseline = 10 single-qubit R_z.
+
+The ratio is (qutrit magic states) / (qubit T gates). The old per-phase unit reproduces the earlier figure (1.42× vs RUS at 10⁻¹⁰), which confirms the method.
+
+| Qutrit side (×6) | vs 2-qubit **RUS** (9.2 + 3.817·log₁₀, BRS 2015): 10⁻⁶ / 10⁻¹⁰ / asym. | vs 2-qubit **deterministic** (≈3·log₂(1/ε), Ross–Selinger): 10⁻⁶ / 10⁻¹⁰ / asym. |
+|---|---|---|
+| **C+D T-cost (Nick, as is)** | 2.66 / **2.87** / 3.30 | 1.43 / **1.36** / 1.26 |
+| C+D T-cost, best-of-100 (extrapolated slope 8.3) | 2.26 / 2.41 / 2.73 | 1.21 / **1.15** / 1.05 |
+| *C+D per-phase N_D (old unit; retracted as a cost)* | *1.29 / 1.42 / 1.70* | *0.69 / 0.67 / 0.65* |
+| *C+R, R counted as one T (Gustafson's own framing)* | *1.27 / 1.40 / 1.69 (Householder)* | *0.68 / 0.67 / 0.65* |
+| C+R Householder, R = 7 T | 8.87 / 9.83 / 11.85 | 4.76 / 4.67 / 4.54 |
+
+Absolute counts at 10⁻¹⁰: qutrit C+D 6 × 226 ≈ 1,360 T₃; 2-qubit RUS ≈ 474 T₂; 2-qubit deterministic ≈ 997 T₂.
+
+- **The earlier "1.37× vs two qubits" (and Gustafson's 1.12/1.40×) compared per-phase or R counts with qubit T counts.** Those are different units, so **retract them as cost statements**.
+- **Like-for-like (deterministic vs deterministic):** a qutrit C+D gate needs **~1.36×** the magic states of two-qubit Clifford+T emulation at 10⁻¹⁰, or ~1.15× with best-of-100 selection. Against the stronger qubit RUS baseline it is ~2.9× (~2.4×). Qutrit RUS was tabled (it does not break the C+D/C+R tie, but it could close the gap to qubit RUS).
+- **Caveat: per-state factory cost.** A qutrit T-state from QRM₃(2) 8→1 (2ε²) vs a qubit T-state from 15→1 (35ε³) costs 0.28–4.3× as much in raw states, depending on which side of a round boundary the target falls (p = 1e-3/1e-4, target 1e-8…1e-14). There is no robust direction. Modern qubit factories (cultivation, Litinski) widen the qubit advantage, and none of their qutrit analogues exist. **Physical footprint (1 qutrit vs 2 qubits) is not modelled.**
+- **Paper framing.**
+  - Qutrit-to-qutrit, C+D beats C+R by ~3.4× in T. That is robust.
+  - Qutrit-vs-qubit should be stated against deterministic qubit synthesis (~1.2–1.4×), with qubit RUS as a stronger baseline (~2.4–2.9×). Do not claim parity with two qubits.
+
 ## 5. Synthesis-side findings
 - **Bug in `hrsa/canonical_reducer.py` `classify_monomial_and_d_cost`.** It hard-coded the residual R to 0. A trailing monomial with mixed entry signs needs one R, because a Clifford monomial has uniform signs.
   - This affected 76% of HRSA candidates and averages 0.7 R per rotation on Nick's f = 10 circuits.
@@ -116,7 +143,7 @@ Summary of results from the 2026-09-29/30 session, kept as a record for later wo
 ## 7. Open items
 1. ~~Re-report Nick's N_D and T-costs with the fixed reducer~~ Done; see §4.
 2. Add T-cost selection to Nick's and zeta9's final candidate selection, with the `111` pre-screen. **Ask Nick to dump the top-K candidates per θ** (see `paper_prep/README.md`, request to Nick).
-3. Whether R or level-4 can be done in ≤6 T with 2 ancillas (level-4: ≥6 rigorous).
+3. ~~≤6 T with 2 ancillas?~~ **No, for both R and level-4** (`two_ancilla/`, 2026-10-01; see §3).
 4. ~~Factory cost comparison~~ Done (§4). c_R/c_T ≥ 16 (optimistic) up to 10⁸ for R factories; 7 via R = 7 T.
 5. Unify the paper's convention: the draft's unsigned C+D (no R, and eq. (37) charges no R) vs Kalra's signed set used in the code. Fix the draft error at l.606.
 6. Clean up Nick's repository sync: local `zeta9` has been pulled to eaa8068, and the local edit is saved in a `git stash`.

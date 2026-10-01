@@ -1,0 +1,15 @@
+fits_topk_f=6.txt: f=6, 792 thetas, 792 rows -> 6 thetas, 6 candidates queued
+  1/6  (9s)
+  6/6  (18s)
+
+6 candidates: 0 NOT exactly unitary, 0 decomposition failures
+
+  f rule              n_th   <Tcost>    <N_D>      <eps>
+  6 best_frob            6    100.00    44.00  1.240e-04
+  6 min_tcost@1          6    100.00    44.00  1.240e-04
+
+Tcost = a * log3(1/eps) + b   (all f pooled)
+  best_frob        a=-38.146  b=  414.21  n=6  f=6
+  min_tcost@1      a=-38.146  b=  414.21  n=6  f=6
+
+wrote synth/colmajor_check_candidates.csv, _summary.csv, _fits.csv

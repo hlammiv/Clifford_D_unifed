@@ -77,3 +77,8 @@ Suggested wording: "To our knowledge, this is the first explicit T-count for an 
 Caveats to state:
 - The compute/phase/uncompute kickback gadget itself is standard.
 - Optimality rests on our exhaustive search (l4_orbits.py): 2-qutrit Clifford group, ancilla returned to |0>.
+
+## Update 2026-10-01: optimality with two ancillas
+An exact search (`two_ancilla/`) rules out ≤6 T with two clean ancillas for both R and diag(1,1,ζ₉).
+
+Suggested wording: "T-count 7 is optimal among circuits using at most two clean ancillas (exhaustive search over all Clifford-conjugated T-rotation products, t ≤ 6); the general-ancilla case remains open."
