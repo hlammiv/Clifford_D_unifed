@@ -2,7 +2,25 @@
 
 This bundle collects every result from the 2026-09-29 → 10-01 work, with the code to recompute it. **Convention A (signed, R charged) is adopted** (decision 2026-10-01, below). Convention B is shown in `01` for comparison only.
 
-## Headline
+## Headline (updated 2026-10-02): T per R_z rotation at ε = 10⁻¹⁰, all models like-for-like
+
+C+D: Nick's exact approximants, 30 θ × 7 f-levels. "Best copy" = the cheapest of 324 exact ±ζ-phase conjugations, all with identical ε. C+R: Gustafson et al. fits, with each R costed in the same gadget model.
+
+| Gadget model | C+D as given | **C+D best copy** | C+R Householder | C+R Exhaustive | C+D advantage (best copy) |
+|---|---|---|---|---|---|
+| Unitary (level-4 = R = 7 T) | 223 (18.7 + 9.73·log₃) | **206** (2.5 + 9.71·log₃) | 776 (R = 7 T) | 619 | **3.8× / 3.0×** |
+| Unitary + rotation merging (shared ancilla) | 166 (14.1 + 7.23·log₃) | **154** (3.3 + 7.21·log₃) | 554 (merged R = 5.0 T) | 442 | **3.6× / 2.9×** |
+| Measurement + Clifford feed-forward (4 T) | 146 (10.9 + 6.44·log₃) | **136** (1.8 + 6.42·log₃) | 444 (R = 4 T) | 354 | **3.3× / 2.6×** |
+
+- **The savings stack.**
+  - Copy selection lowers the intercept by ~10–16 T per rotation in every model. The slope is unchanged.
+  - Merging lowers the slope (9.7 → 7.2). The best copy for unmerged cost stays the best after merging.
+  - Source: `symmetry_variants/stack_summary.txt` (68,040 decompositions; script `stack_analyze.py`).
+- **Merging on the C+R side:** R chains merge to **5.0 T per R**, measured on C+R-shaped gadget chains. So the merged row compares like with like.
+- **Sample size:** fits use n = 210 (30 θ per f). The as-given unitary fit (9.73·log₃, 223 at 10⁻¹⁰) agrees with the 900-matrix fit (10.0·log₃, 227).
+- **Not included yet:** best-of-K over genuinely different approximants. That awaits Nick's larger `--top_n` rerun; at f = 4 it gave a further ~37%.
+
+## Headline (original, 2026-10-01)
 
 | | C+D (this work) | C+R (Gustafson et al. 2503.20203) |
 |---|---|---|

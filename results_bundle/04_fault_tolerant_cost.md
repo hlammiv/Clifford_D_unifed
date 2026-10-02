@@ -71,3 +71,14 @@ Generated with (superseded below: both gadgets 4 T).
   - Ancilla-free single-qutrit C+T has N(≤t) = (216/5)(8·6ᵗ − 3) operators (Glaudell–Ross–Taylor; checked to t = 8). That gives **T ≥ 4.90·log₃(1/ε)**: rigorous worst case over PU(3); for typical θ under an equidistribution assumption supported by enumeration.
   - Ours: 10.0 (2.04×), 7.6 merged (~1.55×), 6.58 measurement (1.34×).
   - **Caveats:** with ancillas or measurement the counting bound weakens (slope ~2 for one ancilla), so the 4.90 floor strictly applies only ancilla-free. The fully T-type ideal (3.15) is impossible because these approximants are not in C+T, which is a thin subgroup (Evra–Parzanchevski).
+
+## UPDATE 2026-10-02 (later): all savings stacked (see README headline)
+- **Symmetry-copy selection × rotation merging × gadget model** (`symmetry_variants/stack_check.py`, 210 matrices × 324 copies):
+
+  | Model | C+D at 10⁻¹⁰, best copy | Fit |
+  |---|---|---|
+  | Unitary | **206** | 2.5 + 9.71·log₃ |
+  | Merged | **154** | 3.3 + 7.21·log₃ |
+  | Measurement | **136** | 1.8 + 6.42·log₃ |
+
+- **Like-for-like C+R** (R = 7 / 5.0 merged / 4 T), Householder: 776 / 554 / 444. **The C+D advantage is 3.3–3.8× (Householder) and 2.6–3.0× (Exhaustive) in every model.**
