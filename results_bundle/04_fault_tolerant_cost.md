@@ -56,3 +56,18 @@ Generated with (superseded below: both gadgets 4 T).
 - **C+D T-cost = 9.7 + 6.58·log₃(1/ε) → ~148 T at 10⁻¹⁰** (f = 14: 139; f = 16: 160).
 - **C+R with R = 4 T:** Householder 444 / Exhaustive 354 at 10⁻¹⁰, so **C+D 3.0× / 2.4× cheaper**. The C+R side benefits from the 4-T R as well; this is the like-for-like comparison.
 - **Break-even against an R factory:** c_R/c_T > 1.33.
+
+## UPDATE 2026-10-02: T-merging, T-depth, lower bound (`depth_optimality/`)
+- **Free ~25% T saving in the unitary model.**
+  - Consecutive 7-T gadgets that share the ancilla begin and end with ancilla-only T rotations, which cancel or fuse.
+  - Standard rotation merging (`tmerge.py`) on 31 of Nick's matrices: T_merged / T = **0.746** (0.69–0.87). Exact: the merged circuit reproduces the 9×9 unitary to 1.7e-11.
+  - Extrapolated: ~11.7 + 7.6·log₃ → **~170 T at 10⁻¹⁰** (vs 227 unmerged; measurement model 148).
+  - The measurement model gains nothing from merging.
+- **T-depth.**
+  - Gadgets: 7-T = 3 rotation layers; 4-T = 2.
+  - Per rotation: ~0.91 × T-count as emitted. The minimum over re-orderings is ~4.6·log₃ (fresh ancilla per gadget) or ~3.6·log₃ (measurement).
+  - Floor: one layer per non-Clifford syllable.
+- **Lower bound.**
+  - Ancilla-free single-qutrit C+T has N(≤t) = (216/5)(8·6ᵗ − 3) operators (Glaudell–Ross–Taylor; checked to t = 8). That gives **T ≥ 4.90·log₃(1/ε)**: rigorous worst case over PU(3); for typical θ under an equidistribution assumption supported by enumeration.
+  - Ours: 10.0 (2.04×), 7.6 merged (~1.55×), 6.58 measurement (1.34×).
+  - **Caveats:** with ancillas or measurement the counting bound weakens (slope ~2 for one ancilla), so the 4.90 floor strictly applies only ancilla-free. The fully T-type ideal (3.15) is impossible because these approximants are not in C+T, which is a thin subgroup (Evra–Parzanchevski).

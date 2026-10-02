@@ -1,0 +1,17 @@
+table build 1.6s
+fits_f=12:0                              wall=  142.46s N_D=105 Tcost=157
+fits_f=12:25                             wall=   98.95s N_D=94 Tcost=184
+fits_f=12:50                             wall=   87.55s N_D=74 Tcost=212
+fits_f=12:75                             wall=   85.76s N_D=81 Tcost=223
+topk_f=12:L273:colmajor                  wall=   83.43s N_D=78 Tcost=201
+topk_f=12:L813:colmajor                  wall=  116.61s N_D=101 Tcost=167
+topk_f=12:L183:tcost                     wall=   89.36s N_D=84 Tcost=197
+fits_f=14:0                              wall=   79.61s N_D=99 Tcost=231
+fits_f=14:25                             wall=   59.08s N_D=89 Tcost=265
+fits_f=14:50                             wall=   91.37s N_D=107 Tcost=196
+fits_f=14:75                             wall=  118.95s N_D=99 Tcost=231
+topk_f=14:L273:colmajor                  wall=   83.52s N_D=126 Tcost=161
+topk_f=14:L813:colmajor                  wall=   99.23s N_D=104 Tcost=188
+topk_f=14:L183:tcost                     wall=   40.73s N_D=128 Tcost=184
+fits_f=16:0                              wall=  131.85s N_D=94 Tcost=262
+fits_f=16:248                            wall=  107.91s N_D=139 Tcost=225

@@ -53,3 +53,26 @@
 - `compiler/cd_to_ct.py`: decomposition → verified Clifford+T circuit (system + 1 ancilla).
 - `nick_test/nick_tcost_all.py`: parallel recount of any fits file.
 - `nick_request/analyze_topk.py`: ingest for Nick's top-K dumps (best-of-K curves and fits).
+
+## UPDATE 2026-10-02: fast decomposer, Nick's top-K data, symmetry-variant selection
+- **Fast exact decomposer** (`decomp_speed/fast_decompose.py`): **~100–300× faster**, with identical output.
+  - Changes: a closed-form χ-adic valuation, a numba double-prefix kernel, and no prefix table.
+  - f = 16 now takes ~0.5–1.2 s per matrix instead of ~2 min.
+  - Validation, all agreeing:
+
+    | Check | Matrices |
+    |---|---|
+    | Original test (all fields) | 49 |
+    | Slow vs fast at f = 4–8, matched by rank | 2,497 |
+    | Slow vs fast at f = 12–16, compared as each angle's set of results (rank labels among exactly tied copies depend on float rounding) | 3,240 |
+
+  - Drop-in use: `fast_decompose.install()`, or `analyze_topk_fast.py`.
+- **Nick's top-K dump** (`data_new/`, ~8.7 M candidates):
+  - At f ≥ 6, all ~36 "candidates" per θ are **diagonal-phase copies D₁·M·D₂ of one approximant**, with identical ε. His `--top_n` pool was too small to contain distinct near-best approximants.
+  - Only f = 4 has real alternatives (~3 distinct ε per θ). There, best-of-K saves ~26 T (~37%).
+  - So the best-of-K slope prediction (10.0 → ~8.3) is **still untested at high f**. It needs a rerun with a much larger `--top_n`.
+- **Symmetry-variant selection** (`symmetry_variants/`): try all 648 exact ±ζ-conjugations and transposes, and keep the cheapest.
+  - Saves a **constant ~16–18 T per rotation** (24% at f = 4 → 7.6% at f = 16).
+  - The slope is unchanged (9.76 → 9.71 per log₃); the intercept drops 18.8 → 2.5.
+  - Mechanism: it fixes the boundary syllables (−1.4 level-4, −1 R).
+  - Cost: ~1–2 min per matrix with the fast decomposer.

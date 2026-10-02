@@ -186,7 +186,7 @@ def main(argv=None):
     ap.add_argument("--colmajor", action="store_true", help="read the 9 groups column-major (true M, not M^T)")
     ap.add_argument("--out", default=str(H / "topk_analysis"))
     a = ap.parse_args(argv)
-    procs = min(a.procs, 8)
+    procs = a.procs  # caller is responsible for co-tenancy limits
 
     items = []
     for p in a.inputs:
@@ -209,11 +209,18 @@ def main(argv=None):
             "n_R_syl", "n_R_resid", "n_R", "Tcost", "wall"]
     recs = []
     t0 = time.time()
+    # stream partial results so an interrupted run keeps its finished candidates
+    partial = open(a.out + "_candidates.partial.csv", "w", newline="")
+    pw = csv.DictWriter(partial, fieldnames=keys, extrasaction="ignore")
+    pw.writeheader()
     with Pool(procs) as pool:
         for i, r in enumerate(pool.imap_unordered(work, items, chunksize=1)):
             recs.append(r)
+            pw.writerow(r)
+            partial.flush()
             if i % 50 == 0 or i == len(items) - 1:
                 print(f"  {i + 1}/{len(items)}  ({time.time() - t0:.0f}s)", flush=True)
+    partial.close()
     recs.sort(key=lambda r: (r["f"], r["theta"], r["rank"]))
     write_csv(a.out + "_candidates.csv", recs, keys)
     nbad = sum(1 for r in recs if not r["unitary_exact"])

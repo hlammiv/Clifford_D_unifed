@@ -1,0 +1,8 @@
+table build 1.9s
+fits_f=16:0                              wall=  159.50s N_D=94 Tcost=262
+fits_f=16:248                            wall=  107.28s N_D=139 Tcost=225
+fits_f=16:496                            wall=  127.43s N_D=143 Tcost=201
+fits_f=16:744                            wall=  144.10s N_D=125 Tcost=231
+topk_f=16:L273:colmajor                  wall=  124.03s N_D=137 Tcost=237
+topk_f=16:L813:colmajor                  wall=  147.89s N_D=119 Tcost=255
+topk_f=16:L183:tcost                     wall=   64.64s N_D=123 Tcost=241

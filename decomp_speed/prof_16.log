@@ -1,0 +1,23 @@
+table build 4.3s
+         288279658 function calls (286144756 primitive calls) in 421.762 seconds
+
+   Ordered by: internal time
+   List reduced from 44 to 12 due to restriction <12>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  3682126   87.416    0.000  201.215    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:551(_z9_sde_chi)
+ 16998330   47.066    0.000   47.066    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:529(_formal_derivative_coefs)
+  6204338   44.863    0.000   80.044    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:171(__mul__)
+ 94771047   31.494    0.000   31.494    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:578(<genexpr>)
+  4653261   27.072    0.000   28.906    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:107(_reduce_9_fast)
+ 18545554   25.730    0.000   25.730    0.000 {built-in method builtins.sum}
+       30   19.762    0.659  382.354   12.745 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:1045(_try_double_prefix)
+3682126/1547224   13.230    0.000  260.520    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:594(sde_chi_z9)
+  4653231   11.725    0.000   86.975    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:443(__mul__)
+  4653231   11.527    0.000   38.685    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:432(__add__)
+  4653231   10.401    0.000   12.858    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:157(__add__)
+ 18545554    9.509    0.000   35.239    0.000 /home/hlamm/Desktop/efficent_gates/unified/hrsa/canonical_reducer.py:524(_signed_weight)
+
+
+
+f=16 row0 wall=421.8s (cProfile) s0=96 n_iter=56 nsyl=86 N_D=94 dbl_calls=30 dbl_time=382.4s
