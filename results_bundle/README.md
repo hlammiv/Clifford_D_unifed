@@ -55,6 +55,7 @@ C+D: Nick's exact approximants, 30 θ × 7 f-levels. "Best copy" = the cheapest 
 | `05_qutrit_vs_two_qubits.md` | Qutrit vs two-qubit emulation in consistent units (retracts the old 1.37×) |
 | `06_synthesis_findings.md` | Residual-R bug, candidate selection by T-cost, null results, the "111" predictor, Euler merging |
 | `tables_generated_measurement_w4-4_wr-4.md` | Same tables in the measurement model (`compute_tables.py --w4 4 --wr 4`) |
+| `08_NT_fits_and_qubit_comparison.md` | **N_D and N_T fit lines** (all gadget models), C+R in T units, and the **qutrit vs qubit** comparison (per rotation and per arbitrary gate), with caveats. Numbers come from `compute_nt_comparison.py` |
 | `07_open_items.md` | What's open, and the request to Nick |
 | `tables_generated.md` | All numeric tables, written by `compute_tables.py` (don't hand-edit) |
 | `compute_tables.py` | Recomputes every table from `nick_test/nick_tcost_2026-09-30.csv` and the published fits. `--w4/--wr` change the gadget weights |
