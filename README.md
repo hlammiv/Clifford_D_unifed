@@ -1,9 +1,65 @@
-# qutrit Clifford+D compiler — efficient_gates
+# Clifford+D synthesis of single-qutrit rotations
 
-Three independent backends for compiling single-qudit unitaries (currently
-focused on Rz(θ) targets) over the qutrit **Clifford + D** gate set.
-The goal is to compare gate counts (N_D) at matched Frobenius accuracy ε
-across the three approaches and to push ε as low as practically possible.
+Code and derived data for
+
+> P. J. Fox, N. Y. Gnedin, E. J. Gustafson, C. Herbig, H. Lamm, and E. M. Murairi,
+> *Fault-tolerant synthesis of single-qutrit rotations from Clifford+D* (2026).
+
+The repository synthesizes single-qutrit rotations `Rz(θ) = diag(e^{-iθ/2}, e^{iθ/2}, 1)` as exact
+unitaries over `Z[ζ₉, 1/3]` (the gate set Clifford+D), decomposes them into Clifford+D words, and
+compiles those into qutrit Clifford+T circuits with the 7-T and 4-T gadgets for `R = diag(1,1,-1)`
+and the level-4 phases.
+
+## Reproducing the paper
+
+Requirements: Python ≥ 3.10 with the packages in [`requirements.txt`](requirements.txt).
+The search backends additionally need a C++17 compiler (`hrsa/`, `esa/`) and Sage/PARI with
+mpi4py (`zeta9/`); reproducing the tables and figures does not.
+
+```bash
+cd results_bundle && ./verify_all.sh          # gadgets, emitter, certificates, tables (8 checks)
+cd ../paper_analysis
+python3 scripts/make_numbers.py               # every number in the paper -> numbers.tex, tables/
+python3 scripts/plot_figures.py               # every data figure -> fig/
+```
+
+| Paper item | Script | Input data |
+|---|---|---|
+| Numbers in the text, Tables III–V | `paper_analysis/scripts/make_numbers.py` | `nick_test/nick_tcost_2026-09-30.csv`, `symmetry_variants/stack_full30_rows.csv.gz`, `nick_request/topk_run/fast_all30_candidates.csv`, `paper_analysis/analysis/prescribed_theta/compare_results.json` |
+| Figs. 2–5, App. E figures | `paper_analysis/scripts/plot_figures.py` | as above, plus `paper_analysis/analysis/special_angles/ang_f*.npz` |
+| Exact approximants (900 matrices) | — | `nick_test/fits_f={4..16}.txt` (θ and 3^f·V, six integers per entry) |
+| Gate counts of the 900 approximants | `nick_test/nick_tcost_all.py` | `nick_test/fits_f=*.txt` |
+| Phase-copy selection | `symmetry_variants/variant_search.py`, `stack_analyze.py` | `nick_test/fits_f=*.txt` |
+| Decomposition (Alg. 3) | `hrsa/canonical_reducer.py`, fast version `decomp_speed/fast_decompose.py` | — |
+| Householder enumeration (Alg. 1) | `hrsa/` (C++, `make`; `HRSA_tester`) | — |
+| Norm-equation pipeline (Alg. 2) | `zeta9/`, wrapper `zeta9_compile.py` | — |
+| 7-T `R` gadget | `r_from_d/verify_R7T.py` | `r_from_d/R_7T_compact.json` |
+| 7-T and 4-T level-4 gadgets | `level4/l4_7T_verify.py`, `level4/l4_meas_uncompute.py` | — |
+| 4-T measured `R` gadget | `measurement_tricks/verify_meas.py` | `measurement_tricks/r_meas_4T.json` |
+| Optimality (Theorem 1, App. C) | `two_ancilla/`, `three_ancilla/verify_lemmas.py`, `r_from_d/raw_lb_1anc.py`, `measurement_tricks/search*.py` | — |
+| Clifford+T emission and merging | `compiler/cd_to_ct.py`, `depth_optimality/tmerge.py` | — |
+| Merged `R` chains, 5N+2 T (Sec. V) | `paper_analysis/analysis/cr_merge/cr_merge.py` | `r_from_d/R_7T_compact.json` |
+| Factory model, Table II | `factory_model/factory_cost.py` | — |
+| Quadratic-residue codes check (Sec. V) | `paper_analysis/analysis/zurel_check/zurel_check.py` | — |
+| Prescribed-angle comparison (Sec. VI, App. E) | `paper_analysis/analysis/prescribed_theta/redecompose.py`, `compare.py` | `prescribed_counts.csv` (derived) |
+| Special-angle statistics (App. E) | `paper_analysis/analysis/special_angles/analyze_angles.py` | `ang_f*.npz` (derived) |
+| C+D vs C+R summary notes | `results_bundle/*.md` | — |
+
+### Data provenance
+
+- The 900 exact approximants in `nick_test/fits_f=*.txt` were produced by N. Gnedin's
+  phase-free special-angle search, a branch of the `zeta9` pipeline. That code is available
+  from the authors on request.
+- Only derived data are committed. The raw inputs behind two derived files are available on request:
+  - the full special-angle output (265 MB), from which `special_angles/ang_f*.npz` is extracted by `extract_angles.py`;
+  - the 11,403 prescribed-angle unitaries (about 100 MB of JSON), from which `prescribed_theta/prescribed_counts.csv` is built.
+- All gate counts use the decomposer with the residual-`R` fix of 2026-09-30. Counts produced
+  before that date in files under `sweep_*` and older notes are lower by up to one `R`.
+
+### Repository status
+
+Development material from earlier stages remains in the tree: HRSA/zeta9 sweeps, the CVP
+backend, the SK bootstrap, and dated notes and plots. The paper uses only the items in the table above.
 
 ## Backends
 
@@ -17,9 +73,9 @@ All three emit a **uniform JSON schema** documented in
 [`compile_qutrit_schema.md`](compile_qutrit_schema.md) so cross-backend
 comparisons can be done from a common file format.
 
-### In-progress: Solovay-Kitaev (SK) bootstrap pipeline
+### Exploratory: Solovay-Kitaev (SK) bootstrap pipeline
 
-A fourth backend is under construction (see `rz_db/` and `u_net/`):
+An exploratory fourth backend, not used in the paper (see `rz_db/` and `u_net/`):
 
 - `rz_db/` — SQLite-backed R_z(θ) lookup DB. Loads from existing HRSA/zeta9
   sweep CSVs. Used by the SK pipeline to avoid re-spawning HRSA per Euler leaf.
@@ -115,10 +171,10 @@ semantic as the zeta9 wrapper's `--max-f`).
 ## Conventions
 
 θ-sign and basis conventions are documented in [`verify_conventions.py`](verify_conventions.py).
-The current canonical sign for `Rz(θ) = diag(e^{iθ/2}, e^{-iθ/2}, 1)`
-matches ESA and HRSA; the zeta9 stage-5 search uses a Householder-row
+The canonical target is `Rz(θ) = diag(e^{-iθ/2}, e^{iθ/2}, 1)`, as in the paper;
+ESA and HRSA match it; the zeta9 stage-5 search uses a Householder-row
 layout described in [`zeta9/HOUSEHOLDER_STAGE5_DESIGN.md`](zeta9/HOUSEHOLDER_STAGE5_DESIGN.md).
 
 ## License
 
-(TBD — pick before public release.)
+A license will be added after Fermilab software-release approval. Until then, all rights are reserved.

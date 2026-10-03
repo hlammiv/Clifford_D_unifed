@@ -1,0 +1,99 @@
+Zurel-Jana-de Silva QQR Strange-state codes in the c_R/c_T model
+
+Per-code data (paper convention eps = depolarising parameter; infidelity = 2eps/3)
+code    [[n,1,d]]    thresh   m   c (eps^m)      P_s(0)   P_s(.015) eps_out(.015)  P_s(.0015) eps_out(.0015) P_s(1.5e-4)
+QQR5    [[5,1,3]]   0.00000   1         2.5     0.02778     0.02709       0.03695     0.02771       0.003744     0.02777
+QQR11   [[11,1,5]]  0.38715   3       3.056   0.0005787   0.0005181     1.063e-05   0.0005724      1.034e-08   0.0005781
+QQR17   [[17,1,7]]  0.34394   1     0.02355   3.358e-06   2.832e-06     0.0003658   3.302e-06      3.536e-05   3.353e-06
+QQR23   [[23,1,8]]  0.16636   3       14.06   7.752e-10   6.153e-10      4.92e-05   7.576e-10      4.758e-08   7.734e-10
+QQR29   [[29,1,11]] 0.00000   1        14.5   1.122e-13   9.718e-14         0.193   1.105e-13        0.02146    1.12e-13
+QQR41   [[41,1,13]] 0.31877   1    0.004588   3.152e-15   2.087e-15     7.024e-05   3.025e-15      6.889e-06   3.139e-15
+QQR47   [[47,1,14]] 0.04864   3       60.06   3.478e-22   2.169e-22     0.0003111   3.318e-22      2.043e-07   3.462e-22
+  (eps-args .015/.0015/1.5e-4 are the depolarising parameters for raw infidelity p = 1e-2/1e-3/1e-4; threshold 0 = no non-trivial threshold)
+  1/P_s(0) for QQR11 = 1728.0 (=1728: Prakash's Golay value reproduced)
+
+c_R/c_T grid (c_T = QRM8 as in the model's Golay row; R route = strange-state distillation -> SS->N->R conversion (x32) -> RUS injection (x3))
+
+p=0.01 N_rot=100  eps_R/gate=9.0e-07  c_T=69.46 ('QRM8', 'QRM8')
+  Golay only (model)          : c_R= 3.898e+10  c_R/c_T= 5.611e+08  ('Golay11', 'Golay11')
+  Golay + QQR17/23/41/47      : c_R= 3.898e+10  c_R/c_T= 5.611e+08  ('Golay11', 'Golay11')
+      level Golay11: inf 1.000e-02 -> 7.087e-06, P_s=0.000515, raw/out=2.136e+04
+      level Golay11: inf 7.087e-06 -> 2.447e-15, P_s=0.0005787, raw/out=1.901e+04
+  optimistic: exact map, P=1  : c_R= 1.162e+04  c_R/c_T=     167.2  ('QQR11', 'QQR11')
+  optimistic: c*eps^m, P=1    : c_R= 1.162e+04  c_R/c_T=     167.2  ('QQR11', 'QQR11')
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 15.2
+
+p=0.01 N_rot=1000  eps_R/gate=9.0e-08  c_T=555.7 ('QRM8', 'QRM8', 'QRM8')
+  Golay only (model)          : c_R= 3.898e+10  c_R/c_T= 7.014e+07  ('Golay11', 'Golay11')
+  Golay + QQR17/23/41/47      : c_R= 3.898e+10  c_R/c_T= 7.014e+07  ('Golay11', 'Golay11')
+      level Golay11: inf 1.000e-02 -> 7.087e-06, P_s=0.000515, raw/out=2.136e+04
+      level Golay11: inf 7.087e-06 -> 2.447e-15, P_s=0.0005787, raw/out=1.901e+04
+  optimistic: exact map, P=1  : c_R= 1.162e+04  c_R/c_T=      20.9  ('QQR11', 'QQR11')
+  optimistic: c*eps^m, P=1    : c_R= 1.162e+04  c_R/c_T=      20.9  ('QQR11', 'QQR11')
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 1.9
+
+p=0.01 N_rot=10000  eps_R/gate=9.0e-09  c_T=555.7 ('QRM8', 'QRM8', 'QRM8')
+  Golay only (model)          : c_R= 3.898e+10  c_R/c_T= 7.014e+07  ('Golay11', 'Golay11')
+  Golay + QQR17/23/41/47      : c_R= 3.898e+10  c_R/c_T= 7.014e+07  ('Golay11', 'Golay11')
+      level Golay11: inf 1.000e-02 -> 7.087e-06, P_s=0.000515, raw/out=2.136e+04
+      level Golay11: inf 7.087e-06 -> 2.447e-15, P_s=0.0005787, raw/out=1.901e+04
+  optimistic: exact map, P=1  : c_R= 1.162e+04  c_R/c_T=      20.9  ('QQR11', 'QQR11')
+  optimistic: c*eps^m, P=1    : c_R= 1.162e+04  c_R/c_T=      20.9  ('QQR11', 'QQR11')
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 1.9
+
+p=0.001 N_rot=100  eps_R/gate=9.0e-07  c_T=64.52 ('QRM8', 'QRM8')
+  Golay only (model)          : c_R= 1.845e+06  c_R/c_T=  2.86e+04  ('Golay11',)
+  Golay + QQR17/23/41/47      : c_R= 1.845e+06  c_R/c_T=  2.86e+04  ('Golay11',)
+      level Golay11: inf 1.000e-03 -> 6.896e-09, P_s=0.0005723, raw/out=1.922e+04
+  optimistic: exact map, P=1  : c_R=      1056  c_R/c_T=     16.37  ('QQR11',)
+  optimistic: c*eps^m, P=1    : c_R=      1056  c_R/c_T=     16.37  ('QQR11',)
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 16.4
+
+p=0.001 N_rot=1000  eps_R/gate=9.0e-08  c_T=64.52 ('QRM8', 'QRM8')
+  Golay only (model)          : c_R= 1.845e+06  c_R/c_T=  2.86e+04  ('Golay11',)
+  Golay + QQR17/23/41/47      : c_R= 1.845e+06  c_R/c_T=  2.86e+04  ('Golay11',)
+      level Golay11: inf 1.000e-03 -> 6.896e-09, P_s=0.0005723, raw/out=1.922e+04
+  optimistic: exact map, P=1  : c_R=      1056  c_R/c_T=     16.37  ('QQR11',)
+  optimistic: c*eps^m, P=1    : c_R=      1056  c_R/c_T=     16.37  ('QQR11',)
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 16.4
+
+p=0.001 N_rot=10000  eps_R/gate=9.0e-09  c_T=64.52 ('QRM8', 'QRM8')
+  Golay only (model)          : c_R= 3.507e+10  c_R/c_T= 5.436e+08  ('Golay11', 'Golay11')
+  Golay + QQR17/23/41/47      : c_R= 3.507e+10  c_R/c_T= 5.436e+08  ('Golay11', 'Golay11')
+      level Golay11: inf 1.000e-03 -> 6.896e-09, P_s=0.0005723, raw/out=1.922e+04
+      level Golay11: inf 6.896e-09 -> 2.254e-24, P_s=0.0005787, raw/out=1.901e+04
+  optimistic: exact map, P=1  : c_R= 1.162e+04  c_R/c_T=     180.1  ('QQR11', 'QQR11')
+  optimistic: c*eps^m, P=1    : c_R= 1.162e+04  c_R/c_T=     180.1  ('QQR11', 'QQR11')
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 16.4
+
+p=0.0001 N_rot=100  eps_R/gate=9.0e-07  c_T=8.006 ('QRM8',)
+  Golay only (model)          : c_R= 1.827e+06  c_R/c_T= 2.282e+05  ('Golay11',)
+  Golay + QQR17/23/41/47      : c_R= 1.827e+06  c_R/c_T= 2.282e+05  ('Golay11',)
+      level Golay11: inf 1.000e-04 -> 6.877e-12, P_s=0.0005781, raw/out=1.903e+04
+  optimistic: exact map, P=1  : c_R=      1056  c_R/c_T=     131.9  ('QQR11',)
+  optimistic: c*eps^m, P=1    : c_R=      1056  c_R/c_T=     131.9  ('QQR11',)
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 132
+
+p=0.0001 N_rot=1000  eps_R/gate=9.0e-08  c_T=8.006 ('QRM8',)
+  Golay only (model)          : c_R= 1.827e+06  c_R/c_T= 2.282e+05  ('Golay11',)
+  Golay + QQR17/23/41/47      : c_R= 1.827e+06  c_R/c_T= 2.282e+05  ('Golay11',)
+      level Golay11: inf 1.000e-04 -> 6.877e-12, P_s=0.0005781, raw/out=1.903e+04
+  optimistic: exact map, P=1  : c_R=      1056  c_R/c_T=     131.9  ('QQR11',)
+  optimistic: c*eps^m, P=1    : c_R=      1056  c_R/c_T=     131.9  ('QQR11',)
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 132
+
+p=0.0001 N_rot=10000  eps_R/gate=9.0e-09  c_T=64.05 ('QRM8', 'QRM8')
+  Golay only (model)          : c_R= 1.827e+06  c_R/c_T= 2.852e+04  ('Golay11',)
+  Golay + QQR17/23/41/47      : c_R= 1.827e+06  c_R/c_T= 2.852e+04  ('Golay11',)
+      level Golay11: inf 1.000e-04 -> 6.877e-12, P_s=0.0005781, raw/out=1.903e+04
+  optimistic: exact map, P=1  : c_R=      1056  c_R/c_T=     16.49  ('QQR11',)
+  optimistic: c*eps^m, P=1    : c_R=      1056  c_R/c_T=     16.49  ('QQR11',)
+  hard floor (one 11->1 round at P=1, x96 conversion+injection): c_R/c_T >= 16.5
+
+Summary (min..max over the 9-point grid):
+  Golay only (model)            :  2.852e+04 ..  5.611e+08
+  Golay+QQR, real acceptance    :  2.852e+04 ..  5.611e+08
+  optimistic exact map P=1      :      16.37 ..      180.1
+  optimistic leading order P=1  :      16.37 ..      180.1
+  floor: 1 round n=11, P=1      :        1.9 ..      131.9
+  comparison: break-even c_R/c_T ~ 1.4-2.6 ; 7-T gadget c_R/c_T = 7 (QRM8 T route)

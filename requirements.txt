@@ -1,0 +1,10 @@
+# Python packages for reproducing the paper's tables and figures
+numpy>=1.24
+scipy>=1.10
+matplotlib>=3.7
+numba>=0.58          # fast decomposer (decomp_speed/)
+mpmath>=1.3          # factory-model check (paper_analysis/analysis/zurel_check)
+# optional accelerators for hrsa/canonical_reducer.py
+gmpy2
+python-flint
+# zeta9/ additionally needs Sage (cypari2/PARI) and mpi4py; see README
